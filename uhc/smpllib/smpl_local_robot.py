@@ -66,9 +66,7 @@ def polar_to_vec(p):
 def in_hull(hull, queries):
     tolerance = 1e-3
     if len(queries.shape) == 1:
-        queries = queries[
-            None,
-        ]
+        queries = queries[None,]
     return np.all(
         np.add(np.dot(queries, hull.equations[:, :-1].T), hull.equations[:, -1])
         <= tolerance,
@@ -83,9 +81,9 @@ def get_joint_geometries(
     joint_names,
     geom_dir,
     scale_dict={},
-    suffix = None,
+    suffix=None,
     verbose=False,
-    min_num_vert = 50,
+    min_num_vert=50,
 ):
 
     vert_to_joint = skin_weights.argmax(axis=1)
@@ -220,10 +218,10 @@ class Joint:
                 [f"{x:.6f}".rstrip("0").rstrip(".") for x in axis_vec]
             )
             self.node.attrib["pos"] = " ".join(
-               [f"{x:.6f}".rstrip("0").rstrip(".") for x in pos]
+                [f"{x:.6f}".rstrip("0").rstrip(".") for x in pos]
             )
             self.node.attrib["damping"] = " ".join(
-            [f"{x:.6f}".rstrip("0").rstrip(".") for x in self.damping]
+                [f"{x:.6f}".rstrip("0").rstrip(".") for x in self.damping]
             )
             self.node.attrib["stiffness"] = " ".join(
                 [f"{x:.6f}".rstrip("0").rstrip(".") for x in self.stiffness]
@@ -236,7 +234,6 @@ class Joint:
 
         if self.actuator is not None:
             self.actuator.sync_node()
-
 
         # if self.name != "Pelvis":
         #     self.node.attrib["frictionloss"] = " ".join(
@@ -810,9 +807,11 @@ class Body:
             self.bone_start = None if parent_body is None else self.pos.copy()
         else:
             self.bone_start = self.pos.copy()
-        self.joints = [Joint(x, self) for x in node.findall('joint[@type="hinge"]')] + \
-                      [Joint(x, self) for x in node.findall('joint[@type="free"]')] + \
-                     [Joint(x, self) for x in node.findall('freejoint')]
+        self.joints = (
+            [Joint(x, self) for x in node.findall('joint[@type="hinge"]')]
+            + [Joint(x, self) for x in node.findall('joint[@type="free"]')]
+            + [Joint(x, self) for x in node.findall("freejoint")]
+        )
 
         # self.geoms = [Geom(x, self) for x in node.findall('geom[@type="capsule"]')]
         supported_geoms = self.cfg.get("supported_geoms", ["capsule", "box"])
@@ -828,7 +827,6 @@ class Body:
         # parameters
         self.bone_end = None
         self.bone_offset = None
-
 
     def __repr__(self):
         return "body_" + self.name
@@ -1078,7 +1076,15 @@ class Body:
 
 
 class Robot:
-    def __init__(self, cfg, data_dir="data/smpl", model_xml_path=None, masterfoot=False, create_default_skeleton=False, clean_up=False):
+    def __init__(
+        self,
+        cfg,
+        data_dir="data/smpl",
+        model_xml_path=None,
+        masterfoot=False,
+        create_default_skeleton=False,
+        clean_up=False,
+    ):
         self.bodies = []
         self.weight = 0
         self.height = 0
@@ -1106,9 +1112,15 @@ class Robot:
         )
 
         if self.smpl_model == "smpl":
-            self.smpl_parser_n = SMPL_Parser(model_path=data_dir, gender="neutral", create_transl=False)
-            self.smpl_parser_m = SMPL_Parser(model_path=data_dir, gender="male", create_transl=False)
-            self.smpl_parser_f = SMPL_Parser(model_path=data_dir, gender="female", create_transl=False)
+            self.smpl_parser_n = SMPL_Parser(
+                model_path=data_dir, gender="neutral", create_transl=False
+            )
+            self.smpl_parser_m = SMPL_Parser(
+                model_path=data_dir, gender="male", create_transl=False
+            )
+            self.smpl_parser_f = SMPL_Parser(
+                model_path=data_dir, gender="female", create_transl=False
+            )
         elif self.smpl_model == "smplh":
             self.smpl_parser_n = SMPLH_Parser(
                 model_path=data_dir,
@@ -1145,7 +1157,7 @@ class Robot:
     def set_model_xml_path(self, model_xml_path):
         self.model_xml_path = model_xml_path
         self.model_dir = osp.dirname(model_xml_path)
-        self.geom_dir = f'{self.model_dir}/mesh/{uuid.uuid4()}'
+        self.geom_dir = f"{self.model_dir}/mesh/{uuid.uuid4()}"
         os.makedirs(self.model_dir, exist_ok=True)
 
     def clean_up(self):
@@ -1182,7 +1194,7 @@ class Robot:
     ):
         if model_xml_path is not None:
             self.set_model_xml_path(model_xml_path)
-        
+
         self.tree = None  # xml tree
 
         if gender[0] == 0:
@@ -1232,7 +1244,7 @@ class Robot:
         if self.mesh:
             rel_geom_dir = os.path.relpath(self.geom_dir, self.model_dir)
             self.skeleton = SkeletonMesh(self.geom_dir, rel_geom_dir)
-            zero_pose = torch.zeros((1,72))
+            zero_pose = torch.zeros((1, 72))
             (
                 verts,
                 joints,
@@ -1245,10 +1257,16 @@ class Robot:
                 joint_range,
                 contype,
                 conaffinity,
-            ) = (smpl_parser.get_mesh_offsets(
-                zero_pose=zero_pose, betas=self.beta, flatfoot=self.flatfoot, scale=scale)
-                 if self.smpl_model != "smplx" else
-                 smpl_parser.get_mesh_offsets(v_template=v_template))
+            ) = (
+                smpl_parser.get_mesh_offsets(
+                    zero_pose=zero_pose,
+                    betas=self.beta,
+                    flatfoot=self.flatfoot,
+                    scale=scale,
+                )
+                if self.smpl_model != "smplx"
+                else smpl_parser.get_mesh_offsets(v_template=v_template)
+            )
 
             # if self.rel_joint_lm:
             # # if False:
@@ -1277,7 +1295,6 @@ class Robot:
             #     joint_range["R_Thorax"][0] = np.array([-np.pi , np.pi ])
             #     joint_range["R_Thorax"][1] = np.array([-np.pi, np.pi])
             #     joint_range["R_Thorax"][2] = np.array([-np.pi, np.pi])
-
 
             #     joint_range["L_Shoulder"][0] = np.array([-np.pi , np.pi ])
             #     joint_range["L_Shoulder"][1] = np.array([-np.pi , np.pi / 2])
@@ -1338,7 +1355,7 @@ class Robot:
                 #     for idx, suffix in enumerate(["_x", "_y", "_z"]):
                 #         if k + suffix in gear_dict:
                 #             size_dict[k][idx] *= gear_dict[k + suffix]
-            
+
             self.hull_dict = get_joint_geometries(
                 verts,
                 joints,
@@ -1356,41 +1373,46 @@ class Robot:
                 sites={},
                 scale=1,
                 equalities={},
-                exclude_contacts = [
-                    ["Chest", "L_Shoulder"], ["Chest", "R_Shoulder"], ["Chest", "R_Thorax"], ["Chest", "L_Thorax"],
-                    ['L_Hip', 'Pelvis'],
-                    ['R_Hip', 'Pelvis'],
-                    ['Torso', 'Pelvis'],
-                    ['L_Knee', 'L_Hip'],
-                    ['R_Knee', 'R_Hip'],
-                    ['Spine', 'Torso'],
-                    ['L_Ankle', 'L_Knee'],
-                    ['R_Ankle', 'R_Knee'],
-                    ['Chest', 'Spine'],
-                    ['L_Toe', 'L_Ankle'],
-                    ['R_Toe', 'R_Ankle'],
-                    ['Neck', 'Chest'],
-                    ['L_Thorax', 'Chest'],
-                    ['R_Thorax', 'Chest'],
-                    ['Head', 'Neck'],
-                    ['L_Shoulder', 'L_Thorax'],
-                    ['R_Shoulder', 'R_Thorax'],
-                    ['L_Elbow', 'L_Shoulder'],
-                    ['R_Elbow', 'R_Shoulder'],
-                    ['L_Wrist', 'L_Elbow'],
-                    ['R_Wrist', 'R_Elbow'],
-                    ['L_Hand', 'L_Wrist'],
-                    ['R_Hand', 'R_Wrist']
-                    ],
+                exclude_contacts=[
+                    ["Chest", "L_Shoulder"],
+                    ["Chest", "R_Shoulder"],
+                    ["Chest", "R_Thorax"],
+                    ["Chest", "L_Thorax"],
+                    ["L_Hip", "Pelvis"],
+                    ["R_Hip", "Pelvis"],
+                    ["Torso", "Pelvis"],
+                    ["L_Knee", "L_Hip"],
+                    ["R_Knee", "R_Hip"],
+                    ["Spine", "Torso"],
+                    ["L_Ankle", "L_Knee"],
+                    ["R_Ankle", "R_Knee"],
+                    ["Chest", "Spine"],
+                    ["L_Toe", "L_Ankle"],
+                    ["R_Toe", "R_Ankle"],
+                    ["Neck", "Chest"],
+                    ["L_Thorax", "Chest"],
+                    ["R_Thorax", "Chest"],
+                    ["Head", "Neck"],
+                    ["L_Shoulder", "L_Thorax"],
+                    ["R_Shoulder", "R_Thorax"],
+                    ["L_Elbow", "L_Shoulder"],
+                    ["R_Elbow", "R_Shoulder"],
+                    ["L_Wrist", "L_Elbow"],
+                    ["R_Wrist", "R_Elbow"],
+                    ["L_Hand", "L_Wrist"],
+                    ["R_Hand", "R_Wrist"],
+                ],
                 collision_groups=contype,
                 conaffinity=conaffinity,
                 simple_geom=False,
             )
         else:
             self.skeleton = Skeleton()
-            joint_offsets, parents_dict, channels, joint_range = smpl_parser.get_offsets(betas=self.beta)
+            joint_offsets, parents_dict, channels, joint_range = (
+                smpl_parser.get_offsets(betas=self.beta)
+            )
 
-            channels = ["x", "y", "z"] # ZL: need to fix
+            channels = ["x", "y", "z"]  # ZL: need to fix
             # if self.rel_joint_lm:
             #     joint_range["L_Knee"][2] = np.array([-np.pi / 16, np.pi / 16])
             #     joint_range["L_Knee"][1] = np.array([-np.pi / 16, np.pi / 16])
@@ -1446,7 +1468,6 @@ class Robot:
         if self.masterfoot:
             self.add_masterfoot()
 
-
         all_root = self.tree.getroot()
         # contact_node = Element("contact", {})
 
@@ -1454,7 +1475,6 @@ class Robot:
         # SubElement(contact_node,"exclude",{"name": "add02", "body1": "R_Shoulder", "body2": "Chest"},)
         # all_root.append(contact_node)
         return joints
-
 
     def in_body(self, body, point):
         return in_hull(self.hull_dict[body]["norm_hull"], point)
@@ -1484,31 +1504,31 @@ class Robot:
 
     def enforce_length_size(self, size_dict):
         distal_dir = {
-                "Pelvis": 1,
-                "L_Hip": 1,
-                "L_Knee": 1,
-                "L_Ankle": [1, 2],
-                "L_Toe": [1, 2],
-                "R_Hip": 1,
-                "R_Knee": 1,
-                "R_Ankle": [1, 2],
-                "R_Toe": [1, 2],
-                "Torso": 1,
-                "Spine": 1,
-                "Chest": 1,
-                "Neck": 1,
-                "Head": 1,
-                "L_Thorax": 0,
-                "L_Shoulder": 0,
-                "L_Elbow": 0,
-                "L_Wrist": 0,
-                "L_Hand": 0,
-                "R_Thorax": 0,
-                "R_Shoulder": 0,
-                "R_Elbow": 0,
-                "R_Wrist": 0,
-                "R_Hand": 0,
-            }
+            "Pelvis": 1,
+            "L_Hip": 1,
+            "L_Knee": 1,
+            "L_Ankle": [1, 2],
+            "L_Toe": [1, 2],
+            "R_Hip": 1,
+            "R_Knee": 1,
+            "R_Ankle": [1, 2],
+            "R_Toe": [1, 2],
+            "Torso": 1,
+            "Spine": 1,
+            "Chest": 1,
+            "Neck": 1,
+            "Head": 1,
+            "L_Thorax": 0,
+            "L_Shoulder": 0,
+            "L_Elbow": 0,
+            "L_Wrist": 0,
+            "L_Hand": 0,
+            "R_Thorax": 0,
+            "R_Shoulder": 0,
+            "R_Elbow": 0,
+            "R_Wrist": 0,
+            "R_Hand": 0,
+        }
         for k, v in size_dict.items():
             subset = np.array(v[distal_dir[k]])
             subset[subset <= 1] = 1
@@ -1824,7 +1844,10 @@ class Robot:
 
     def export_vis_string_self(self, num=3, smpl_robot=None, fname=None, num_cones=0):
         # colors = ["0.8 0.6 .4 1", "0.7 0 0 1", "0.0 0.0 0.7 1"] * num
-        colors = [f"{np.random.random():.3f} {np.random.random():.3f} {np.random.random():.3f} 1" for _ in range(num)]
+        colors = [
+            f"{np.random.random():.3f} {np.random.random():.3f} {np.random.random():.3f} 1"
+            for _ in range(num)
+        ]
         # Export multiple vis strings
         tree = deepcopy(self.tree)
         if smpl_robot is None:
@@ -1973,6 +1996,7 @@ if __name__ == "__main__":
     }
 
     betas = torch.zeros(1, 10)
+
     model_xml_path = f"embodied_pose/data/assets/mjcf/smpl_mesh_humanoid_v1_test.xml"
     smpl_robot = Robot(robot_cfg, model_xml_path=model_xml_path, clean_up=True)
     smpl_robot.load_from_skeleton(betas=betas)

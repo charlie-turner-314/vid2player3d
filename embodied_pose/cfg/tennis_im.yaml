@@ -1,6 +1,6 @@
 name: HumanoidSMPLIM
 test_name: HumanoidSMPLIMVis
-env: 
+env:
   numEnvs: 4096
   envSpacing: 5
   episodeLength: 300
@@ -18,16 +18,16 @@ env:
   keyBodies: ["R_Ankle", "L_Ankle", "L_Hand", "R_Hand"]
   contactBodies: ["R_Ankle", "L_Ankle"]
   terminationBodyHeight: -0.5
-  terminationHeadHeight: 1.0
+  terminationHeadHeight: -0.5
   enableEarlyTermination: True
-  motion_file: data/motion_lib/amass
+  motion_file: data/motion_lib/tennis2
   residual_force_scale: 31.85
   context_length: 32
   context_padding: 8
 
   asset:
-    assetRoot: embodied_pose/data/assets
-    assetFileName: mjcf/smpl_mesh_humanoid_amass_v1.xml
+    assetRoot: vid2player/data/assets
+    assetFileName: smpl_mesh_humanoid_djokovic.xml
 
   plane:
     staticFriction: 1.0
@@ -51,7 +51,6 @@ sim:
     num_inner_iterations: 10
     warm_start: 0.25
 
-
 params:
   seed: 7
 
@@ -64,8 +63,8 @@ params:
   network:
     name: pose_im_rnn
     separate: True
-    actor_net_type: 'style_cat1'
-    latent_type: 'sphere'
+    actor_net_type: "style_cat1"
+    latent_type: "sphere"
     use_running_obs: True
     running_obs_type: ours
 
@@ -111,7 +110,8 @@ params:
   load_checkpoint: False
 
   config:
-    name: Humanoid
+    pretrained_model_cp: results/amass_im/models/Humanoid_latest.pth
+    name: Sinner
     env_name: rlgpu
     multi_gpu: False
     ppo: True
@@ -123,12 +123,12 @@ params:
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
-    learning_rate: 2e-5
+    learning_rate: 1e-5
     lr_schedule: constant
     score_to_win: 20000
     max_epochs: 10000
-    save_best_after: 50
-    save_frequency: 200
+    save_best_after: 1
+    save_frequency: 1
     print_stats: True
     entropy_coef: 0.0
     truncate_grads: True

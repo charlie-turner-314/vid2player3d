@@ -6,4 +6,4 @@ python -m pip install rl-games==1.1.4 pyvista==0.34.2 pyglet==1.5.27 tqdm
 python -m pip install --ignore-installed vtk==9.1.0
 
 # Downgrade numpy
-conda install numpy=1.23.5 --force -c conda-forge
+conda install numpy=1.23.5 --force -c conda-forge -y

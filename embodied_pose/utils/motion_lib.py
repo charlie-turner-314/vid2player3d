@@ -9,11 +9,14 @@ import numpy as np
 import os
 import yaml
 import joblib
+from . import torch_utils
 import torch
-from utils import torch_utils
-
-from poselib.skeleton.skeleton3d import SkeletonMotion
-from poselib.core.rotation3d import *
+try:
+    from poselib.poselib.skeleton.skeleton3d import SkeletonMotion
+    from poselib.poselib.core.rotation3d import *
+except:
+    from poselib.skeleton.skeleton3d import SkeletonMotion
+    from poselib.core.rotation3d import *
 
 
 USE_CACHE = True
@@ -21,6 +24,7 @@ print("MOVING MOTION DATA TO GPU, USING CACHE:", USE_CACHE)
 
 if not USE_CACHE:
     old_numpy = torch.Tensor.numpy
+
     class Patch:
         def numpy(self):
             if self.is_cuda:
@@ -29,6 +33,7 @@ if not USE_CACHE:
                 return old_numpy(self)
 
     torch.Tensor.numpy = Patch.numpy
+
 
 class DeviceCache:
     def __init__(self, obj, device):
@@ -48,7 +53,7 @@ class DeviceCache:
                     out = out.to(self.device, dtype=torch.float32)
                 else:
                     out.to(self.device)
-                setattr(self, k, out)  
+                setattr(self, k, out)
                 num_added += 1
             elif isinstance(out, np.ndarray):
                 out = torch.tensor(out)
@@ -58,15 +63,22 @@ class DeviceCache:
                     out.to(self.device)
                 setattr(self, k, out)
                 num_added += 1
-        
+
     def __getattr__(self, string):
-        out = getattr(super().__getattribute__('obj'), string)
+        out = getattr(super().__getattribute__("obj"), string)
         return out
 
 
-class MotionLib():
-    def __init__(self, motion_file, dof_body_ids, dof_offsets,
-                 key_body_ids, device, clean_up=False):
+class MotionLib:
+    def __init__(
+        self,
+        motion_file,
+        dof_body_ids,
+        dof_offsets,
+        key_body_ids,
+        device,
+        clean_up=False,
+    ):
         self._dof_body_ids = dof_body_ids
         self._dof_offsets = dof_offsets
         self._num_dof = dof_offsets[-1]
@@ -79,12 +91,16 @@ class MotionLib():
         self.grs = torch.cat([m.global_rotation for m in motions], dim=0).float()
         self.lrs = torch.cat([m.local_rotation for m in motions], dim=0).float()
         self.grvs = torch.cat([m.global_root_velocity for m in motions], dim=0).float()
-        self.gravs = torch.cat([m.global_root_angular_velocity for m in motions], dim=0).float()
+        self.gravs = torch.cat(
+            [m.global_root_angular_velocity for m in motions], dim=0
+        ).float()
         self.dvs = torch.cat([m.dof_vels for m in motions], dim=0).float()
 
         self.generate_length_starts()
 
-        self.motion_ids = torch.arange(len(self._motions), dtype=torch.long, device=self._device)
+        self.motion_ids = torch.arange(
+            len(self._motions), dtype=torch.long, device=self._device
+        )
 
         if clean_up:
             del self._motions
@@ -99,23 +115,46 @@ class MotionLib():
         self.length_starts = lengths_shifted.cumsum(0)
 
     def merge_multiple_motion_libs(self, motion_lib_arr):
-        keys = ['gts', 'grs', 'lrs', 'grvs', 'gravs', 'dvs', '_motion_weights',
-                '_motion_lengths', '_motion_num_frames', '_motion_dt', '_motion_fps', '_motion_bodies', '_motion_body_idx', '_motion_body_scales', '_motion_min_verts_h', '_motion_seq_ids', '_motion_seq_names', '_motion_kp2d', '_motion_cam_proj']
-        
+        keys = [
+            "gts",
+            "grs",
+            "lrs",
+            "grvs",
+            "gravs",
+            "dvs",
+            "_motion_weights",
+            "_motion_lengths",
+            "_motion_num_frames",
+            "_motion_dt",
+            "_motion_fps",
+            "_motion_bodies",
+            "_motion_body_idx",
+            "_motion_body_scales",
+            "_motion_min_verts_h",
+            "_motion_seq_ids",
+            "_motion_seq_names",
+            "_motion_kp2d",
+            "_motion_cam_proj",
+        ]
+
         for key in keys:
             if key not in self.__dict__ or self.__dict__[key] is None:
                 continue
-            
-            if key == '_motion_seq_names':
+
+            if key == "_motion_seq_names":
                 for mlib in motion_lib_arr:
                     self.__dict__[key].extend(mlib.__dict__[key])
             else:
-                arr = [self.__dict__[key]] + [mlib.__dict__[key] for mlib in motion_lib_arr]
+                arr = [self.__dict__[key]] + [
+                    mlib.__dict__[key] for mlib in motion_lib_arr
+                ]
                 self.__dict__[key] = torch.cat(arr, dim=0)
-        
+
         self.generate_length_starts()
         self._motion_weights = self._motion_weights / sum(self._motion_weights)
-        self.motion_ids = torch.arange(len(self._motion_lengths), dtype=torch.long, device=self._device)
+        self.motion_ids = torch.arange(
+            len(self._motion_lengths), dtype=torch.long, device=self._device
+        )
 
     def num_motions(self):
         return len(self.motion_ids)
@@ -138,12 +177,12 @@ class MotionLib():
     def sample_time(self, motion_ids, truncate_time=None, motion_time_range=None):
         n = len(motion_ids)
         phase = torch.rand(motion_ids.shape, device=self._device)
-        
+
         motion_len = self._motion_lengths[motion_ids]
-        if (truncate_time is not None):
-            assert(truncate_time >= 0.0)
+        if truncate_time is not None:
+            assert truncate_time >= 0.0
             motion_len = torch.clamp_min(motion_len - truncate_time, 0)
-        
+
         if motion_time_range is not None:
             start, end = motion_time_range
             if start is None:
@@ -161,13 +200,27 @@ class MotionLib():
     def get_motion_length(self, motion_ids):
         return self._motion_lengths[motion_ids]
 
-    def get_motion_state(self, motion_ids, motion_times, return_rigid_body=False, return_body_shape=False, num_motion_cycles=0, motion_cycle_len=None, device=None, adjust_height=False, ground_tolerance=0.0, return_kp2d=False):
+    def get_motion_state(
+        self,
+        motion_ids,
+        motion_times,
+        return_rigid_body=False,
+        return_body_shape=False,
+        num_motion_cycles=0,
+        motion_cycle_len=None,
+        device=None,
+        adjust_height=False,
+        ground_tolerance=0.0,
+        return_kp2d=False,
+    ):
 
         motion_len = self._motion_lengths[motion_ids]
         num_frames = self._motion_num_frames[motion_ids]
         dt = self._motion_dt[motion_ids]
 
-        frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_times, motion_len, num_frames, dt)
+        frame_idx0, frame_idx1, blend = self._calc_frame_blend(
+            motion_times, motion_len, num_frames, dt
+        )
 
         f0l = frame_idx0 + self.length_starts[motion_ids]
         f1l = frame_idx1 + self.length_starts[motion_ids]
@@ -184,16 +237,24 @@ class MotionLib():
         root_vel = self.grvs[f0l]
 
         root_ang_vel = self.gravs[f0l]
-        
+
         key_pos0 = self.gts[f0l.unsqueeze(-1), self._key_body_ids.unsqueeze(0)]
         key_pos1 = self.gts[f1l.unsqueeze(-1), self._key_body_ids.unsqueeze(0)]
 
         dof_vel = self.dvs[f0l]
 
-        vals = [root_pos0, root_pos1, local_rot0, local_rot1, root_vel, root_ang_vel, key_pos0, key_pos1]
+        vals = [
+            root_pos0,
+            root_pos1,
+            local_rot0,
+            local_rot1,
+            root_vel,
+            root_ang_vel,
+            key_pos0,
+            key_pos1,
+        ]
         for v in vals:
             assert v.dtype != torch.float64
-
 
         blend = blend.unsqueeze(-1)
 
@@ -203,8 +264,10 @@ class MotionLib():
 
         blend_exp = blend.unsqueeze(-1)
         key_pos = (1.0 - blend_exp) * key_pos0 + blend_exp * key_pos1
-        
-        local_rot = torch_utils.slerp(local_rot0, local_rot1, torch.unsqueeze(blend, axis=-1))
+
+        local_rot = torch_utils.slerp(
+            local_rot0, local_rot1, torch.unsqueeze(blend, axis=-1)
+        )
         dof_pos = self._local_rotation_to_dof(local_rot)
 
         if motion_cycle_len is not None:
@@ -227,7 +290,7 @@ class MotionLib():
             key_pos[..., 2] -= min_vh[:, None]
 
         res = (root_pos, root_rot, dof_pos, root_vel, root_ang_vel, dof_vel, key_pos)
-    
+
         if return_rigid_body:
             rb_pos0 = self.gts[f0l]
             rb_pos1 = self.gts[f1l]
@@ -246,20 +309,20 @@ class MotionLib():
             res += (rb_pos, rb_rot)
 
         if return_body_shape:
-            res += (self._motion_bodies[motion_ids])
+            res += self._motion_bodies[motion_ids]
 
         if return_kp2d:
             blend_round = torch.round(blend_exp)
             kp2d0 = self._motion_kp2d[f0l]
             kp2d1 = self._motion_kp2d[f1l]
             kp2d = (1.0 - blend_round) * kp2d0 + blend_round * kp2d1
-            
+
             cam_proj0 = self._motion_cam_proj[f0l]
             cam_proj1 = self._motion_cam_proj[f1l]
             cam_proj = (1.0 - blend_round) * cam_proj0 + blend_round * cam_proj1
 
             res += (kp2d, cam_proj)
-        
+
         if device is not None and res[0].device != device:
             res = tuple([x.to(device) for x in res])
 
@@ -299,22 +362,35 @@ class MotionLib():
         for f in range(num_motion_files):
             curr_file = motion_files[f]
             # normal string file name
-            if (isinstance(curr_file, str)):
-                print("Loading {:d}/{:d} motion files: {:s}".format(f + 1, num_motion_files, curr_file))
+            if isinstance(curr_file, str):
+                print(
+                    "Loading {:d}/{:d} motion files: {:s}".format(
+                        f + 1, num_motion_files, curr_file
+                    )
+                )
                 motion_file_data = np.load(curr_file, allow_pickle=True).item()
                 curr_motion = SkeletonMotion.from_dict(motion_file_data)
-                self._motion_aa.append(torch.zeros(72, device=self._device, dtype=torch.float32))
-                self._motion_bodies.append(torch.zeros(17, device=self._device, dtype=torch.float32))
+                self._motion_aa.append(
+                    torch.zeros(72, device=self._device, dtype=torch.float32)
+                )
+                self._motion_bodies.append(
+                    torch.zeros(17, device=self._device, dtype=torch.float32)
+                )
                 self._motion_body_scales.append(1.0)
                 self._motion_body_idx.append(0)
                 self._motion_min_verts_h.append(0.0)
                 self._motion_files.append(curr_file)
             # data dict
-            elif (isinstance(curr_file, dict)):
+            elif isinstance(curr_file, dict):
                 motion_file_data = curr_file
                 curr_motion = SkeletonMotion.from_dict(curr_file)
                 if "beta" in motion_file_data:
-                    beta, gender, pose_aa, min_verts_h = motion_file_data['beta'], motion_file_data['gender'], motion_file_data['pose_aa'], motion_file_data['min_verts_h']
+                    beta, gender, pose_aa, min_verts_h = (
+                        motion_file_data["beta"],
+                        motion_file_data["gender"],
+                        motion_file_data["pose_aa"],
+                        motion_file_data["min_verts_h"],
+                    )
 
                     if isinstance(gender, bytes):
                         gender = gender.decode("utf-8")
@@ -326,16 +402,36 @@ class MotionLib():
                         gender = [2]
                     else:
                         raise Exception("Gender Not Supported!!")
-                    self._motion_aa.append(torch.tensor(pose_aa, device=self._device, dtype=torch.float32))
-                    self._motion_bodies.append(torch.tensor(np.concatenate((gender, beta)), device=self._device, dtype=torch.float32))
-                    self._motion_body_scales.append(motion_file_data['body_scale'])
-                    self._motion_body_idx.append(motion_file_data['beta_idx'])
+                    self._motion_aa.append(
+                        torch.tensor(pose_aa, device=self._device, dtype=torch.float32)
+                    )
+                    self._motion_bodies.append(
+                        torch.tensor(
+                            np.concatenate((gender, beta)),
+                            device=self._device,
+                            dtype=torch.float32,
+                        )
+                    )
+                    self._motion_body_scales.append(motion_file_data["body_scale"])
+                    self._motion_body_idx.append(motion_file_data["beta_idx"])
                     self._motion_min_verts_h.append(min_verts_h)
-                    self._motion_seq_ids.append(motion_file_data['seq_idx'])
-                    self._motion_seq_names.append(motion_file_data['seq_name'])
-                    if 'kp2d' in motion_file_data:
-                        self._motion_kp2d.append(torch.tensor(motion_file_data['kp2d'], device=self._device, dtype=torch.float32))
-                        self._motion_cam_proj.append(torch.tensor(motion_file_data['cam_proj'], device=self._device, dtype=torch.float32))
+                    self._motion_seq_ids.append(motion_file_data["seq_idx"])
+                    self._motion_seq_names.append(motion_file_data["seq_name"])
+                    if "kp2d" in motion_file_data:
+                        self._motion_kp2d.append(
+                            torch.tensor(
+                                motion_file_data["kp2d"],
+                                device=self._device,
+                                dtype=torch.float32,
+                            )
+                        )
+                        self._motion_cam_proj.append(
+                            torch.tensor(
+                                motion_file_data["cam_proj"],
+                                device=self._device,
+                                dtype=torch.float32,
+                            )
+                        )
                 else:
                     raise Exception("No beta in motion file!")
 
@@ -348,39 +444,63 @@ class MotionLib():
             self._motion_fps.append(motion_fps)
             self._motion_dt.append(curr_dt)
             self._motion_num_frames.append(num_frames)
- 
+
             curr_dof_vels = self._compute_motion_dof_vels(curr_motion)
             curr_motion.dof_vels = curr_dof_vels
 
             # Moving motion tensors to the GPU
             if USE_CACHE:
-                curr_motion = DeviceCache(curr_motion, self._device)                
+                curr_motion = DeviceCache(curr_motion, self._device)
             else:
                 curr_motion.tensor = curr_motion.tensor.to(self._device)
-                curr_motion._skeleton_tree._parent_indices = curr_motion._skeleton_tree._parent_indices.to(self._device)
-                curr_motion._skeleton_tree._local_translation = curr_motion._skeleton_tree._local_translation.to(self._device)
+                curr_motion._skeleton_tree._parent_indices = (
+                    curr_motion._skeleton_tree._parent_indices.to(self._device)
+                )
+                curr_motion._skeleton_tree._local_translation = (
+                    curr_motion._skeleton_tree._local_translation.to(self._device)
+                )
                 curr_motion._rotation = curr_motion._rotation.to(self._device)
 
             self._motions.append(curr_motion)
             self._motion_lengths.append(curr_len)
-            
+
             curr_weight = motion_weights[f]
             self._motion_weights.append(curr_weight)
 
-        self._motion_lengths = torch.tensor(self._motion_lengths, device=self._device, dtype=torch.float32)
+        self._motion_lengths = torch.tensor(
+            self._motion_lengths, device=self._device, dtype=torch.float32
+        )
 
-        self._motion_weights = torch.tensor(self._motion_weights, dtype=torch.float32, device=self._device)
+        self._motion_weights = torch.tensor(
+            self._motion_weights, dtype=torch.float32, device=self._device
+        )
         self._motion_weights /= self._motion_weights.sum()
 
-        self._motion_fps = torch.tensor(self._motion_fps, device=self._device, dtype=torch.float32)
+        self._motion_fps = torch.tensor(
+            self._motion_fps, device=self._device, dtype=torch.float32
+        )
         self._motion_bodies = torch.stack(self._motion_bodies, dim=0)
-        self._motion_body_scales = torch.tensor(self._motion_body_scales, device=self._device, dtype=torch.float32)
+        self._motion_body_scales = torch.tensor(
+            self._motion_body_scales, device=self._device, dtype=torch.float32
+        )
         self._motion_body_idx = torch.tensor(self._motion_body_idx, device=self._device)
-        self._motion_kp2d = torch.cat(self._motion_kp2d, dim=0) if len(self._motion_kp2d) > 0 else None
-        self._motion_cam_proj = torch.cat(self._motion_cam_proj, dim=0) if len(self._motion_cam_proj) > 0 else None
-        self._motion_min_verts_h = torch.tensor(self._motion_min_verts_h, device=self._device, dtype=torch.float32)
-        self._motion_dt = torch.tensor(self._motion_dt, device=self._device, dtype=torch.float32)
-        self._motion_num_frames = torch.tensor(self._motion_num_frames, device=self._device)
+        self._motion_kp2d = (
+            torch.cat(self._motion_kp2d, dim=0) if len(self._motion_kp2d) > 0 else None
+        )
+        self._motion_cam_proj = (
+            torch.cat(self._motion_cam_proj, dim=0)
+            if len(self._motion_cam_proj) > 0
+            else None
+        )
+        self._motion_min_verts_h = torch.tensor(
+            self._motion_min_verts_h, device=self._device, dtype=torch.float32
+        )
+        self._motion_dt = torch.tensor(
+            self._motion_dt, device=self._device, dtype=torch.float32
+        )
+        self._motion_num_frames = torch.tensor(
+            self._motion_num_frames, device=self._device
+        )
         self._motion_seq_ids = torch.tensor(self._motion_seq_ids, device=self._device)
 
         return
@@ -390,33 +510,32 @@ class MotionLib():
         if isinstance(motion_file, dict):
 
             motion_files = list(motion_file.values())
-            motion_weights = [1/len(motion_files)] * len(motion_files)
+            motion_weights = [1 / len(motion_files)] * len(motion_files)
 
         else:
             ext = os.path.splitext(motion_file)[1]
-            if (ext == ".yaml"):
+            if ext == ".yaml":
                 dir_name = os.path.dirname(motion_file)
                 motion_files = []
                 motion_weights = []
 
-                with open(os.path.join(os.getcwd(), motion_file), 'r') as f:
+                with open(os.path.join(os.getcwd(), motion_file), "r") as f:
                     motion_config = yaml.load(f, Loader=yaml.SafeLoader)
 
-                motion_list = motion_config['motions']
+                motion_list = motion_config["motions"]
                 for motion_entry in motion_list:
-                    curr_file = motion_entry['file']
-                    curr_weight = motion_entry['weight']
-                    assert(curr_weight >= 0)
+                    curr_file = motion_entry["file"]
+                    curr_weight = motion_entry["weight"]
+                    assert curr_weight >= 0
 
                     curr_file = os.path.join(dir_name, curr_file)
                     motion_weights.append(curr_weight)
                     motion_files.append(curr_file)
 
-            elif (ext == ".pkl"):
+            elif ext == ".pkl":
                 motion_data = joblib.load(motion_file)
                 motion_files = list(motion_data.values())
-                motion_weights = [1/len(motion_files)] * len(motion_files)
-
+                motion_weights = [1 / len(motion_files)] * len(motion_files)
 
             else:
                 motion_files = [motion_file]
@@ -451,39 +570,43 @@ class MotionLib():
             frame_dof_vel = self._local_rotation_to_dof_vel(local_rot0, local_rot1, dt)
             frame_dof_vel = frame_dof_vel
             dof_vels.append(frame_dof_vel)
-        
+
         dof_vels.append(dof_vels[-1])
         dof_vels = torch.stack(dof_vels, dim=0)
 
         return dof_vels
-    
+
     def _local_rotation_to_dof(self, local_rot):
         body_ids = self._dof_body_ids
         dof_offsets = self._dof_offsets
 
         n = local_rot.shape[0]
-        dof_pos = torch.zeros((n, self._num_dof), dtype=torch.float, device=self._device)
+        dof_pos = torch.zeros(
+            (n, self._num_dof), dtype=torch.float, device=self._device
+        )
 
         for j in range(len(body_ids)):
             body_id = body_ids[j]
             joint_offset = dof_offsets[j]
             joint_size = dof_offsets[j + 1] - joint_offset
 
-            if (joint_size == 3):
+            if joint_size == 3:
                 joint_q = local_rot[:, body_id]
                 joint_exp_map = torch_utils.quat_to_exp_map(joint_q)
-                dof_pos[:, joint_offset:(joint_offset + joint_size)] = joint_exp_map
-            elif (joint_size == 1):
+                dof_pos[:, joint_offset : (joint_offset + joint_size)] = joint_exp_map
+            elif joint_size == 1:
                 joint_q = local_rot[:, body_id]
                 joint_theta, joint_axis = torch_utils.quat_to_angle_axis(joint_q)
-                joint_theta = joint_theta * joint_axis[..., 1] # assume joint is always along y axis
+                joint_theta = (
+                    joint_theta * joint_axis[..., 1]
+                )  # assume joint is always along y axis
 
                 joint_theta = normalize_angle(joint_theta)
                 dof_pos[:, joint_offset] = joint_theta
 
             else:
                 print("Unsupported joint type")
-                assert(False)
+                assert False
 
         return dof_pos
 
@@ -503,17 +626,19 @@ class MotionLib():
             joint_offset = dof_offsets[j]
             joint_size = dof_offsets[j + 1] - joint_offset
 
-            if (joint_size == 3):
+            if joint_size == 3:
                 joint_vel = local_vel[body_id]
-                dof_vel[joint_offset:(joint_offset + joint_size)] = joint_vel
+                dof_vel[joint_offset : (joint_offset + joint_size)] = joint_vel
 
-            elif (joint_size == 1):
-                assert(joint_size == 1)
+            elif joint_size == 1:
+                assert joint_size == 1
                 joint_vel = local_vel[body_id]
-                dof_vel[joint_offset] = joint_vel[1] # assume joint is always along y axis
+                dof_vel[joint_offset] = joint_vel[
+                    1
+                ]  # assume joint is always along y axis
 
             else:
                 print("Unsupported joint type")
-                assert(False)
+                assert False
 
         return dof_vel

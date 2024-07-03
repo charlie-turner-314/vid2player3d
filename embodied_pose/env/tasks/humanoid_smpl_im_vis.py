@@ -20,30 +20,40 @@ from utils.mjviewer import MjViewer
 
 class HumanoidSMPLIMVis(HumanoidSMPLIM):
 
-    def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless):
+    def __init__(
+        self, cfg, sim_params, physics_engine, device_type, device_id, headless
+    ):
 
         self.show_mj_viewer = not headless
-        show_gym_viewer = cfg['env'].get('show_gym_viewer', False)
-        super().__init__(cfg=cfg,
-                         sim_params=sim_params,
-                         physics_engine=physics_engine,
-                         device_type=device_type,
-                         device_id=device_id,
-                         headless=headless or not show_gym_viewer)
+        show_gym_viewer = cfg["env"].get("show_gym_viewer", False)
+        super().__init__(
+            cfg=cfg,
+            sim_params=sim_params,
+            physics_engine=physics_engine,
+            device_type=device_type,
+            device_id=device_id,
+            headless=headless or not show_gym_viewer,
+        )
         self.headless = headless
         self.cam_inited = False
         self.max_episode_length = 3000
         self.vis_mode = self.args.vis_mode
-        if self.cfg['env'].get('record', False):
+        if self.cfg["env"].get("record", False):
             if self.args.rec_once:
-                self.cfg['env']['num_rec_frames'] = self._motion_lib._motion_num_frames.max()
+                self.cfg["env"][
+                    "num_rec_frames"
+                ] = self._motion_lib._motion_num_frames.max()
                 print(f"Recording only {self.cfg['env']['num_rec_frames']} frames")
             self.recording = True
             self.start_recording()
 
     def start_recording(self):
-        filename = self.cfg['env'].get('rec_fname', self._video_path % datetime.now().strftime('%Y-%m-%d-%H:%M:%S'))
-        self.writer = imageio.get_writer(filename, fps=30, quality=8, macro_block_size=None)
+        filename = self.cfg["env"].get(
+            "rec_fname", self._video_path % datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        )
+        self.writer = imageio.get_writer(
+            filename, fps=30, quality=8, macro_block_size=None
+        )
         self.frame_index = 0
         print(f"============ Writing video to {filename} ============")
 
@@ -61,9 +71,9 @@ class HumanoidSMPLIMVis(HumanoidSMPLIM):
             else:
                 self.end_recording()
         if key == glfw.KEY_C:
-            print(f'cam_distance: {self.mj_viewer.cam.distance:.3f}')
-            print(f'cam_elevation: {self.mj_viewer.cam.elevation:.3f}')
-            print(f'cam_azimuth: {self.mj_viewer.cam.azimuth:.3f}')
+            print(f"cam_distance: {self.mj_viewer.cam.distance:.3f}")
+            print(f"cam_elevation: {self.mj_viewer.cam.elevation:.3f}")
+            print(f"cam_azimuth: {self.mj_viewer.cam.azimuth:.3f}")
         else:
             return False
 
@@ -74,10 +84,16 @@ class HumanoidSMPLIMVis(HumanoidSMPLIM):
             num_vis_humanoids = 3
             model_file = humanoid_files[0]
             # print(f"Loading model file: {model_file}")
-            vis_model_file = model_file[:-4] + '_vis.xml'
+            vis_model_file = model_file[:-4] + "_vis.xml"
             self.num_vis_capsules = 100
             self.num_vis_spheres = 100
-            create_vis_model_xml(model_file, vis_model_file, num_vis_humanoids, num_vis_capsules=self.num_vis_capsules, num_vis_spheres=self.num_vis_spheres)
+            create_vis_model_xml(
+                model_file,
+                vis_model_file,
+                num_vis_humanoids,
+                num_vis_capsules=self.num_vis_capsules,
+                num_vis_spheres=self.num_vis_spheres,
+            )
             self.mj_model = load_model_from_path(vis_model_file)
             self.mj_sim = MjSim(self.mj_model)
             self.mj_viewer = MjViewer(self.mj_sim)
@@ -92,7 +108,8 @@ class HumanoidSMPLIMVis(HumanoidSMPLIM):
             self.mj_viewer = None
 
     def render_vis(self, init=False):
-        if self.headless: return
+        if self.headless:
+            return
         self._sync_ref_motion(init)
         self.mj_viewer_setup(init)
         for _ in range(30 if self.recording else 10):
@@ -101,11 +118,11 @@ class HumanoidSMPLIMVis(HumanoidSMPLIM):
         if self.recording:
             self.frame_index += 1
             self.writer.append_data(self.mj_viewer._read_pixels_as_in_window())
-            if self.frame_index >= self.cfg['env'].get('num_rec_frames', 300):
+            if self.frame_index >= self.cfg["env"].get("num_rec_frames", 300):
                 self.recording = False
                 self.end_recording()
                 quit()
-    
+
     def mj_viewer_setup(self, init):
         self.mj_viewer.cam.lookat[:2] = self.mj_data.qpos[:2]
         self.mj_viewer.cam.lookat[0] += 0.5
@@ -130,23 +147,29 @@ class HumanoidSMPLIMVis(HumanoidSMPLIM):
 
     def _sync_ref_motion(self, init=False):
         dof_euler = self.convert_dof_pos_to_dof_euler(self._dof_pos[0])
-        self.set_mj_actor_qpos(actor_qpos=self.mj_data.qpos[:self.nq], 
-                               root_pos=self._rigid_body_pos[0, 0].cpu().numpy(), 
-                               root_rot=self._rigid_body_rot[0, 0].cpu().numpy(), 
-                               dof_pos=dof_euler.cpu().numpy())
+        self.set_mj_actor_qpos(
+            actor_qpos=self.mj_data.qpos[: self.nq],
+            root_pos=self._rigid_body_pos[0, 0].cpu().numpy(),
+            root_rot=self._rigid_body_rot[0, 0].cpu().numpy(),
+            dof_pos=dof_euler.cpu().numpy(),
+        )
 
         if not init:
-            target_dof_euler = self.convert_dof_pos_to_dof_euler(self._prev_target_dof_pos[0])
-            self.set_mj_actor_qpos(actor_qpos=self.mj_data.qpos[self.nq: 2 * self.nq], 
-                                root_pos=self._prev_target_root_pos[0].cpu().numpy(), 
-                                root_rot=self._prev_target_root_rot[0].cpu().numpy(), 
-                                dof_pos=target_dof_euler.cpu().numpy())
+            target_dof_euler = self.convert_dof_pos_to_dof_euler(
+                self._prev_target_dof_pos[0]
+            )
+            self.set_mj_actor_qpos(
+                actor_qpos=self.mj_data.qpos[self.nq : 2 * self.nq],
+                root_pos=self._prev_target_root_pos[0].cpu().numpy(),
+                root_rot=self._prev_target_root_rot[0].cpu().numpy(),
+                dof_pos=target_dof_euler.cpu().numpy(),
+            )
 
-            self.mj_data.qpos[self.nq * 2:] = self.mj_data.qpos[:self.nq]
+            self.mj_data.qpos[self.nq * 2 :] = self.mj_data.qpos[: self.nq]
             self.mj_data.qpos[self.nq * 2 + 2] += 1000.0
         else:
-            self.mj_data.qpos[self.nq: 2 * self.nq] = self.mj_data.qpos[:self.nq]
-            self.mj_data.qpos[self.nq * 2:] = self.mj_data.qpos[:self.nq]
+            self.mj_data.qpos[self.nq : 2 * self.nq] = self.mj_data.qpos[: self.nq]
+            self.mj_data.qpos[self.nq * 2 :] = self.mj_data.qpos[: self.nq]
             self.mj_data.qpos[self.nq * 2 + 2] += 1000.0
 
         self.mj_data.qpos[self.nq] += 1.0
