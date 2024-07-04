@@ -617,7 +617,7 @@ def xyxy2xywh(bbox):  # from HybrIK
     return [cx, cy, w, h]
 
 
-def process_hybrik(input_file, output_file):
+def process_hybrik(input_file: str, output_file: str):
     data_dir = "data/smpl"
     smpl_parser_n = SMPL_Parser(model_path=data_dir, gender="neutral")
     smpl_parser_m = SMPL_Parser(model_path=data_dir, gender="male")
