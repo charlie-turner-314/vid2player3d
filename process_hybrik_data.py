@@ -617,12 +617,7 @@ def xyxy2xywh(bbox):  # from HybrIK
     return [cx, cy, w, h]
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="sample_data/res_wild/res.pk")
-    parser.add_argument("--output", default="sample_data/wild_processed.pkl")
-    args = parser.parse_args()
-
+def process_hybrik(input_file, output_file):
     data_dir = "data/smpl"
     smpl_parser_n = SMPL_Parser(model_path=data_dir, gender="neutral")
     smpl_parser_m = SMPL_Parser(model_path=data_dir, gender="male")
@@ -637,7 +632,7 @@ if __name__ == "__main__":
     )
     smpl_2op_submap = smpl2op_map[smpl2op_map < 22]
 
-    res_data = pk.load(open(args.input, "rb"))
+    res_data = pk.load(open(input_file, "rb"))
 
     pose_mat = np.array(res_data["pred_thetas"])
     trans_orig = np.array(res_data["transl"]).squeeze()
@@ -738,4 +733,4 @@ if __name__ == "__main__":
         "points3d": None,
         "cam": cam,
     }
-    joblib.dump(new_dict, args.output)
+    joblib.dump(new_dict, output_file)
