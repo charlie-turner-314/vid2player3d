@@ -159,7 +159,7 @@ class MjViewer(MjViewerBasic):
         self._transparent = False  # Make everything transparent.
 
         # this variable is estamated as a running average.
-        
+
         self._hide_overlay = False  # hide the entire overlay.
         self._user_overlay = {}
 
@@ -221,6 +221,10 @@ class MjViewer(MjViewerBasic):
     def _read_pixels_as_in_window(self):
         # Reads pixels with markers and overlay from the same camera as screen.
         resolution = glfw.get_framebuffer_size(self.sim._render_context_window.window)
+        if resolution[0] % 2 != 0:
+            resolution = (resolution[0] - 1, resolution[1])
+        if resolution[1] % 2 != 0:
+            resolution = (resolution[0], resolution[1] - 1)
 
         # resolution = np.array(resolution)
         # resolution = resolution * min(1000 / np.min(resolution), 1)
@@ -358,7 +362,9 @@ class MjViewer(MjViewerBasic):
             if self._record_video:
                 # Rough estimate of fps of the video since rendering speed is unknown.
                 fps = self.video_fps
-                filename = self._video_path % datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+                filename = self._video_path % datetime.now().strftime(
+                    "%Y-%m-%d-%H:%M:%S"
+                )
                 self._video_process = Process(
                     target=save_video,
                     args=(self._video_queue, filename, fps),
@@ -423,7 +429,9 @@ class MjViewer(MjViewerBasic):
 
 def save_video(queue, filename, fps=30, quality=8):
     print(f"============ Writing video to {filename} fps:{fps} ============")
-    writer = imageio.get_writer(filename, fps=fps, macro_block_size=None, quality=quality)
+    writer = imageio.get_writer(
+        filename, fps=fps, macro_block_size=None, quality=quality
+    )
     while True:
         frame = queue.get()
         if frame is None:
