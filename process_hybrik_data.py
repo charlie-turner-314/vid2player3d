@@ -17,7 +17,7 @@ import pickle as pk
 from scipy.spatial.transform import Rotation as sRot
 import matplotlib.pyplot as plt
 import joblib
-from uhc.smpllib.smpl_parser import SMPL_Parser, SMPLH_BONE_ORDER_NAMES, SMPLH_Parser
+from .uhc.smpllib.smpl_parser import SMPL_Parser, SMPLH_BONE_ORDER_NAMES, SMPLH_Parser
 import torch
 
 
