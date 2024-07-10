@@ -18,29 +18,35 @@ class Video3DPoseDataset(Dataset):
     ):
         self.opt = copy.deepcopy(opt)
         self.manifest = load_json(os.path.join(opt.dataset_dir, "manifest.json"))
+        # CHARLIE: joint_pos_arr is the position of the joints relative to: Root in Court coordinates
         self.joint_pos_arr = np.load(
             os.path.join(opt.dataset_dir, "joint_pos.npy"), mmap_mode="r"
         )
+        # CHARLIE: joint_rot_arr is the rotation of the joints in euler angles
         self.joint_rot_arr = np.load(
             os.path.join(opt.dataset_dir, "joint_rot.npy"), mmap_mode="r"
         )
         if "joint_velo" in opt.pose_feature:
+            # CHARLIE: joint_velo_arr is the velocity of the joints - we can ignore this
             self.joint_rot_arr = np.load(
                 os.path.join(opt.dataset_dir, "joint_rot.npy"), mmap_mode="r"
             )
         if "joint_rotmat" in opt.pose_feature:
+            # CHARLIE: joint_rotmat_arr is the rotation matrix of the joints - we can maybe ignore this
             self.joint_rotmat_arr = np.load(
                 os.path.join(opt.dataset_dir, "joint_rotmat.npy"), mmap_mode="r"
             )
         if "joint_quat" in opt.pose_feature:
+            # CHARLIE: joint_quat_arr is the quaternion of the joints. - we can maybe ignore this
             self.joint_quat_arr = np.load(
                 os.path.join(opt.dataset_dir, "joint_quat.npy"), mmap_mode="r"
             )
-        # make the valid arr and save as valid.npy
-        arr = np.ones_like(self.joint_pos_arr[:, 0], dtype=bool)
-        np.save(os.path.join(opt.dataset_dir, "valid.npy"), arr)
-
-        self.valid_arr = np.load(os.path.join(opt.dataset_dir, "valid.npy"))
+        # CHARLIE:
+        # valid_arr is used to filter out invalid frames
+        # An invalid frame is a frame that is not annotated in the dataset
+        # lets hack this for now and make all frames valid
+        # self.valid_arr = np.load(os.path.join(opt.dataset_dir, "valid.npy"))
+        self.valid_arr = np.ones(self.joint_pos_arr.shape[0], dtype=bool)
 
         self.sequences = []
         self.selected_arr = np.zeros_like(self.valid_arr)
@@ -49,6 +55,7 @@ class Video3DPoseDataset(Dataset):
             self.phase_rad_arr = np.zeros(self.valid_arr.shape[0], dtype=float)
 
         def find_neighboring_hits(point, fid):
+            # Find the two hits that are closest to the given frame id
             assert fid <= point[-1]["fid"]
             for hid, hit in enumerate(point):
                 if fid == point[hid + 1]["fid"] and hid == 0:

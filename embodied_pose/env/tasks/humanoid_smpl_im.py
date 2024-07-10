@@ -946,39 +946,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
         if torch.any(reset_mask):
             self.rew_buf[reset_mask] = 0
             self._sub_rewards[reset_mask] = 0
-
-        if self.cfg["env"].get("export_dataset") is not None:
-            self._export_dataset(body_pos, body_rot, body_vel)
         return
-
-    def _export_dataset(self, body_pos, body_rot, body_vel):
-        # Append the current states to the files specified in the config
-        export_dataset = self.cfg["env"]["export_dataset"].split(",")
-        for dataset in export_dataset:
-            if "joint_pos" in dataset:
-                print(body_pos.shape)
-                os.makedirs(os.path.dirname(dataset), exist_ok=True)
-                # either create or append the body_pos to the file (npy format)
-                body_pos = body_pos.cpu().numpy()
-                # shape of body_pos is (num_envs, num_bodies, 3)
-                # lets just use env 0 for now
-                # TODO: fix this?
-                body_pos = body_pos[0]
-                if os.path.exists(dataset):
-                    body_pos = np.concatenate(
-                        [np.load(dataset, allow_pickle=True), body_pos]
-                    )
-                np.save(dataset, body_pos)
-            if "joint_rot" in dataset:
-                os.makedirs(os.path.dirname(dataset), exist_ok=True)
-                # either create or append the body_rot to the file (npy format)
-                body_rot = body_rot.cpu().numpy()
-                body_rot = body_rot[0]
-                if os.path.exists(dataset):
-                    body_rot = np.concatenate(
-                        [np.load(dataset, allow_pickle=True), body_rot]
-                    )
-                np.save(dataset, body_rot)
 
     def get_aux_losses(self, model_res_dict):
         aux_loss_specs = self.cfg["env"].get("aux_loss_specs", dict())
