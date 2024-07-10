@@ -714,7 +714,7 @@ def process_hybrik(input_file: str, output_file: str):
     new_dict = {}
     start = 0
     end = B
-    key = "00"
+    key = os.path.basename(input_file).split(".")[0]
     new_dict[key] = {
         "joints2d": kp_25[start:end].copy(),
         "pose_body": pose_body[start:end],

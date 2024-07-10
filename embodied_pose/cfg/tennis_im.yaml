@@ -20,7 +20,7 @@ env:
   terminationBodyHeight: -0.5
   terminationHeadHeight: -0.5
   enableEarlyTermination: True
-  motion_file: data/motion_lib/tennis2
+  motion_file: data/motion_lib/tennis
   residual_force_scale: 31.85
   context_length: 32
   context_padding: 8
@@ -127,8 +127,8 @@ params:
     lr_schedule: constant
     score_to_win: 20000
     max_epochs: 10000
-    save_best_after: 1
-    save_frequency: 1
+    save_best_after: 50
+    save_frequency: 100
     print_stats: True
     entropy_coef: 0.0
     truncate_grads: True
