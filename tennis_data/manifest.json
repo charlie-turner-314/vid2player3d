@@ -1,0 +1,30 @@
+[
+  {
+    "name": "kyrgios_med_2022",
+    "gender": "mens",
+    "background": "usopen",
+    "is_orig": true,
+    "sequences": {
+      "fg": [
+        {
+          "handedness": "right",
+          "base": 0,
+          "player": "Kyrgios",
+          "point_idx": 0,
+          "start": 0,
+          "length": 143,
+          "beta": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        }
+      ]
+    },
+    "points_annotation": [
+      {
+        "keyframes": [
+          { "fid": 0, "fg": false },
+          { "fid": 75, "fg": true },
+          { "fid": 143, "fg": false }
+        ]
+      }
+    ]
+  }
+]

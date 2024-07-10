@@ -1,5 +1,9 @@
 class MotionVAEOption(object):
 
+    # Random errors
+    condition_root_x_only = False
+    no_condition_root_y = False
+
     # Dataset
     dataset_dir = "tennis_dataset"
     sport = "tennis"
@@ -94,7 +98,8 @@ motion_vae_opt_dict = {
         ],  # ['root_pos', 'root_velo', 'joint_rotmat', 'joint_pos', 'joint_velo'],
         "update_joint_pos": False,
         "predict_phase": True,
-        "frame_size": 6 + 24 * 6 + 23 * 3 + 23 * 3,
+        "frame_size": 6,  # + 24 * 6 + 23 * 3 + 23 * 3,
+        # "frame_size": 6 + 24 * 6 + 23 * 3 + 23 * 3,
         "num_condition_frames": 1,
         "num_future_predictions": 1,
         "nframes_seq": 10,
@@ -117,5 +122,14 @@ motion_vae_opt_dict = {
         "model_ver": "nadal",
         "base_opt_ver": "federer",
         "player_name": ["Nadal"],
+    },
+    "kyrgios": {
+        "batch_size": 1,
+        "nseqs": 1,
+        "model_ver": "kyrgios",
+        "base_opt_ver": "federer",
+        "handedness": "right",
+        "player_name": ["Kyrgios"],
+        "dataset_dir": "../tennis_data",
     },
 }

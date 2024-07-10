@@ -132,7 +132,10 @@ class Encoder(nn.Module):
         super().__init__()
         # Encoder
         # Takes pose | condition (n * poses) as input
-        input_size = frame_size_condition * num_condition_frames + frame_size_truth * num_future_predictions
+        input_size = (
+            frame_size_condition * num_condition_frames
+            + frame_size_truth * num_future_predictions
+        )
         inter_size = frame_size_truth * num_future_predictions
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(inter_size + hidden_size, hidden_size)
@@ -238,7 +241,7 @@ class MixedDecoder(nn.Module):
         coefficients = F.softmax(self.gate(torch.cat((z, c), dim=1)), dim=1)
         layer_out = c
 
-        for (weight, bias, activation) in self.decoder_layers:
+        for weight, bias, activation in self.decoder_layers:
             flat_weight = weight.flatten(start_dim=1, end_dim=2)
             mixed_weight = torch.matmul(coefficients, flat_weight).view(
                 coefficients.shape[0], *weight.shape[1:3]

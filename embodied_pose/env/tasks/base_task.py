@@ -159,6 +159,7 @@ class BaseTask:
         return sim
 
     def step(self, actions):
+
         if self.dr_randomizations.get("actions", None):
             actions = self.dr_randomizations["actions"]["noise_lambda"](actions)
 
@@ -179,12 +180,6 @@ class BaseTask:
             self.obs_buf = self.dr_randomizations["observations"]["noise_lambda"](
                 self.obs_buf
             )
-
-        # export current state (root and joint orientations, root position, joint positions, linear joint velocities)
-        _root_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
-        root_tensor = gymtorch.wrap_tensor(_root_tensor)
-        print(root_tensor.shape)
-
 
     def get_states(self):
         return self.states_buf

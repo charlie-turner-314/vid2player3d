@@ -10,6 +10,10 @@ import copy
 import torch
 
 
+def debug(msg):
+    print(msg)
+
+
 class Video3DPoseDataset(Dataset):
 
     def __init__(
@@ -22,7 +26,7 @@ class Video3DPoseDataset(Dataset):
         self.joint_pos_arr = np.load(
             os.path.join(opt.dataset_dir, "joint_pos.npy"), mmap_mode="r"
         )
-        # CHARLIE: joint_rot_arr is the rotation of the joints in euler angles
+        # CHARLIE: joint_rot_arr is the rotation of the joints
         self.joint_rot_arr = np.load(
             os.path.join(opt.dataset_dir, "joint_rot.npy"), mmap_mode="r"
         )
@@ -37,13 +41,11 @@ class Video3DPoseDataset(Dataset):
                 os.path.join(opt.dataset_dir, "joint_rotmat.npy"), mmap_mode="r"
             )
         if "joint_quat" in opt.pose_feature:
-            # CHARLIE: joint_quat_arr is the quaternion of the joints. - we can maybe ignore this
             self.joint_quat_arr = np.load(
                 os.path.join(opt.dataset_dir, "joint_quat.npy"), mmap_mode="r"
             )
         # CHARLIE:
-        # valid_arr is used to filter out invalid frames
-        # An invalid frame is a frame that is not annotated in the dataset
+        # valid_arr is used to filter out invalid frames ( no idea what that is)
         # lets hack this for now and make all frames valid
         # self.valid_arr = np.load(os.path.join(opt.dataset_dir, "valid.npy"))
         self.valid_arr = np.ones(self.joint_pos_arr.shape[0], dtype=bool)
@@ -68,13 +70,17 @@ class Video3DPoseDataset(Dataset):
         # Fliter sequences
         for video in self.manifest:
             if video["background"] not in opt.background:
+                debug("Background not matched")
                 continue
             if video["gender"] not in opt.gender:
+                debug("Gender not matched")
                 continue
             if opt.sport == "tennis":
                 if video.get("is_orig") == True and "orig" not in opt.split_annotation:
+                    debug("Orig not matched")
                     continue
                 if video.get("is_orig") == False and "weak" not in opt.split_annotation:
+                    debug("Weak not matched")
                     continue
             print(video["name"])
 
@@ -89,6 +95,7 @@ class Video3DPoseDataset(Dataset):
             for seq in seqs_candidate:
                 if opt.player_handness is not None:
                     if seq["handness"] not in opt.player_handness:
+                        debug("Handedness not matched")
                         continue
                 else:
                     if video.get("is_orig") or seq["player"] is not None:
@@ -97,11 +104,13 @@ class Video3DPoseDataset(Dataset):
                             opt.player_name is not None
                             and seq["player"] not in opt.player_name
                         ):
+                            debug("Player name not matched")
                             continue
                 seq = seq.copy()
 
                 if opt.predict_phase:
                     if not video.get("is_orig"):
+                        debug("Not orig, needs to be")
                         continue
                     point = video["points_annotation"][seq["point_idx"]]["keyframes"]
                     for idx in range(seq["length"]):
@@ -180,13 +189,16 @@ class Video3DPoseDataset(Dataset):
             joint_quat = self.joint_quat_arr.reshape(-1, 24 * 4)
             feature_all = concat(feature_all, joint_quat, axis=1)
         if "joint_rotmat" in opt.pose_feature:
+            print("Before", self.joint_rotmat_arr.reshape(-1, 24, 3, 3).copy().shape)
             joint_rotmat = (
                 rotmat_to_rot6d(
                     torch.from_numpy(self.joint_rotmat_arr.reshape(-1, 24, 3, 3).copy())
-                )
-                .numpy()
-                .reshape(-1, 24 * 6)
+                ).numpy()
+                # .reshape(-1, 24 * 6)
+                .reshape(-1, 6)
             )
+            print("As rot6d", joint_rotmat.shape)
+            print("need to concat with:", feature_all.shape)
             feature_all = concat(feature_all, joint_rotmat, axis=1)
 
         feature_all = feature_all[np.logical_and(self.valid_arr, self.selected_arr)]

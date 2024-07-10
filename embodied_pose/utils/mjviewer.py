@@ -163,8 +163,8 @@ class MjViewer(MjViewerBasic):
         self._hide_overlay = False  # hide the entire overlay.
         self._user_overlay = {}
 
-        self.video_fps = 120
-        # self.video_fps = 30
+        # self.video_fps = 120
+        self.video_fps = 60
         self._time_per_render = 1 / self.video_fps
 
         self.frame_skip = 1

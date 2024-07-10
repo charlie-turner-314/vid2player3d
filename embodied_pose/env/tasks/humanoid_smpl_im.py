@@ -21,7 +21,12 @@ from isaacgym.torch_utils import *
 
 import torch
 from env.tasks.humanoid_smpl import HumanoidSMPL, dof_to_obs
-from utils.torch_transform import heading_to_vec, angle_axis_to_rot6d
+from utils.torch_transform import (
+    heading_to_vec,
+    angle_axis_to_rot6d,
+    ypr_euler_from_quat,
+    quaternion_to_rotation_matrix,
+)
 from utils import torch_utils
 from uhc.smpllib.smpl_local_robot import Robot
 
@@ -126,7 +131,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
             for body in bodies:
                 ind = self.body_names.index(body)
                 self.body_pos_weights[ind] = val
-
+        self.n_steps = 0
         return
 
     def register_model(self, model):
@@ -524,7 +529,64 @@ class HumanoidSMPLIM(HumanoidSMPL):
         if self.viewer and self.debug_viz:
             self._update_debug_viz()
 
+        #
+        if self.cfg["env"].get("export_dataset") is not None:
+            self._export_frame()
+
         return
+
+    def _export_frame(self):
+        """Export the state of the actor to the dataset in NPY files. Appends to npy files if they exist"""
+        dataset_dir = self.cfg["env"]["export_dataset"]
+        if not os.path.exists(dataset_dir):
+            os.makedirs(dataset_dir)
+        # get current motion id
+        motion_id = self._reset_ref_motion_ids[0].item()
+        # get the body position (xyz) (24 x 3)
+        body_pos = self._rigid_body_pos[0].cpu()
+        # get the body rotation (quaternion) (24 x 4)
+        body_rot = self._rigid_body_rot[0].cpu()
+        # get the linear body velocity (xyz) (24 x 3)
+        # body_vel = self._rigid_body_vel[0]
+        # convert body_rot from quaternion to euler angles
+        body_rot_euler = ypr_euler_from_quat(body_rot)
+        # also get the rotmat
+        body_rotmat = quaternion_to_rotation_matrix(body_rot)
+        # print out the shapes of them
+        # export to joint_pos.npy
+        file_path = os.path.join(dataset_dir, "joint_pos.npy")
+        if os.path.exists(file_path):
+            joint_pos = np.load(file_path, allow_pickle=True)
+            joint_pos = np.concatenate((joint_pos, body_pos), axis=0)
+        else:
+            joint_pos = body_pos
+        np.save(file_path, joint_pos)
+        # export to joint_rot.npy
+        file_path = os.path.join(dataset_dir, "joint_rot.npy")
+        if os.path.exists(file_path):
+            joint_rot = np.load(file_path, allow_pickle=True)
+            joint_rot = np.concatenate((joint_rot, body_rot_euler), axis=0)
+        else:
+            joint_rot = body_rot_euler
+        np.save(file_path, joint_rot)
+        # export to joint_quat.npy
+        file_path = os.path.join(dataset_dir, "joint_quat.npy")
+        if os.path.exists(file_path):
+            joint_quat = np.load(file_path, allow_pickle=True)
+            joint_quat = np.concatenate((joint_quat, body_rot), axis=0)
+        else:
+            joint_quat = body_rot
+        np.save(file_path, joint_quat)
+        # export to joint_rotmat.npy
+        print(body_rotmat.shape)
+        file_path = os.path.join(dataset_dir, "joint_rotmat.npy")
+        if os.path.exists(file_path):
+            joint_rotmat = np.load(file_path, allow_pickle=True)
+            joint_rotmat = np.concatenate((joint_rotmat, body_rotmat))
+            print(joint_rotmat.shape)
+        else:
+            joint_rotmat = body_rotmat
+        np.save(file_path, joint_rotmat)
 
     def _load_motion(self, motion_file):
         gpu_motion_lib = self.cfg["env"].get("gpu_motion_lib", True)
@@ -897,6 +959,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
             for x in self.obs_names
         ]
         obs = torch.cat([x.reshape(x.shape[0], -1) for x in obs], dim=-1)
+
         return obs
 
     def _compute_reward(self, actions):
