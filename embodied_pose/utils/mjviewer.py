@@ -334,12 +334,21 @@ class MjViewer(MjViewerBasic):
         self.add_overlay(const.GRID_TOPLEFT, "Toggle geomgroup visibility", "0-4")
 
         # add overlay of coordinates of first body
-        if self.sim.data.qpos.shape[0] > 0:
-            self.add_overlay(
-                const.GRID_TOPLEFT,
-                "Body position",
-                f"{self.sim.data.qpos[0]}",
-            )
+        self.add_overlay(
+            const.GRID_TOPLEFT,
+            "Body position 0",
+            f"{self.sim.data.get_body_xpos('Pelvis')}",
+        )
+        self.add_overlay(
+            const.GRID_TOPLEFT,
+            "Body position 1",
+            f"{self.sim.data.get_body_xpos('1_Pelvis')}",
+        )
+        self.add_overlay(
+            const.GRID_TOPLEFT,
+            "Body position 2",
+            f"{self.sim.data.get_body_xpos('2_Pelvis')}",
+        )
 
     def key_callback(self, window, key, scancode, action, mods):
         if self.custom_key_callback is not None:

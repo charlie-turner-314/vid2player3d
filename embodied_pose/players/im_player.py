@@ -7,6 +7,7 @@ from rl_games.algos_torch import torch_ext
 from rl_games.algos_torch.players import rescale_actions, unsqueeze_obs
 from rl_games.common.player import BasePlayer
 
+from env.tasks.humanoid_smpl_im_vis import HumanoidSMPLIMVis
 import learning.common_player as common_player
 
 
@@ -14,7 +15,7 @@ class ImitatorPlayer(common_player.CommonPlayer):
     def __init__(self, config):
         BasePlayer.__init__(self, config)
         self.args = config["args"]
-        self.task = self.env.task
+        self.task: HumanoidSMPLIMVis = self.env.task
         self.horizon_length = config["horizon_length"]
         self.num_actors = config["num_actors"]
         self.network = config["network"]
@@ -256,6 +257,11 @@ class ImitatorPlayer(common_player.CommonPlayer):
             )
 
     def run(self):
+
+        print("* " * 50)
+        print(self.task._motion_lib)
+        print(" *" * 50)
+
         n_games = self.games_num
         render = self.render_env
         n_game_life = self.n_game_life
@@ -277,10 +283,12 @@ class ImitatorPlayer(common_player.CommonPlayer):
 
         need_init_rnn = self.is_rnn
         for _ in range(n_games):
+            print("================================== New Game!")
             if games_played >= n_games:
                 break
 
             obs_dict = self.env_reset()
+            print(obs_dict.keys())
             batch_size = 1
             batch_size = self.get_batch_size(obs_dict["obs"], batch_size)
 
@@ -304,6 +312,7 @@ class ImitatorPlayer(common_player.CommonPlayer):
             for n in range(self.max_steps):
                 t = n % self.task.context_length
                 if n > 0 and t == 0:
+                    print(n)
                     self.task._init_context(
                         self.task._reset_ref_motion_ids, self.task._cur_ref_motion_times
                     )
@@ -375,13 +384,20 @@ class ImitatorPlayer(common_player.CommonPlayer):
                             )
 
                     sum_game_res += game_res
-                    if batch_size // self.num_agents == 1 or games_played >= n_games:
+                    if batch_size // self.num_agents == 1:
+                        print(
+                            f"Batch size ({batch_size}) // self.num_agents {self.num_agents} == 1"
+                        )
+                        break
+                    if games_played >= n_games:
+                        print(f"games played ({games_played}) >= n_games ({n_games})")
                         break
 
                 done_indices = done_indices[:, 0]
 
                 prev_dones = done.clone()
                 if done[0]:
+                    print("done[0] apparently")
                     break
 
         print(sum_rewards)

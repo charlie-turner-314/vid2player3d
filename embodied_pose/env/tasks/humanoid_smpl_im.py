@@ -333,6 +333,8 @@ class HumanoidSMPLIM(HumanoidSMPL):
         print("sampled motion ids:", self._reset_ref_motion_ids)
 
         unique_motion_ids = np.unique(motion_ids)
+        unique_motion_ids.sort()
+        print(unique_motion_ids)
 
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
@@ -529,7 +531,8 @@ class HumanoidSMPLIM(HumanoidSMPL):
         if self.viewer and self.debug_viz:
             self._update_debug_viz()
 
-        #
+        print(self._reset_ref_motion_ids.cpu().tolist())
+
         if self.cfg["env"].get("export_dataset") is not None:
             self._export_frame()
 
@@ -794,7 +797,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
         self.context_feat = self.context_feat.view(
             self.num_envs, -1, self.context_feat.shape[-1]
         )
-        print(all_motion_times.get_device())
         self.context_mask = all_motion_times.to(self._motion_lib._device) <= (
             self._motion_lib._motion_lengths[self._reset_ref_motion_ids] + 2 * self.dt
         ).unsqueeze(-1)
