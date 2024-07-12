@@ -334,7 +334,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
 
         unique_motion_ids = np.unique(motion_ids)
         unique_motion_ids.sort()
-        print(unique_motion_ids)
 
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
@@ -530,8 +529,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
         # debug viz
         if self.viewer and self.debug_viz:
             self._update_debug_viz()
-
-        print(self._reset_ref_motion_ids.cpu().tolist())
 
         if self.cfg["env"].get("export_dataset") is not None:
             self._export_frame()

@@ -288,7 +288,6 @@ class ImitatorPlayer(common_player.CommonPlayer):
                 break
 
             obs_dict = self.env_reset()
-            print(obs_dict.keys())
             batch_size = 1
             batch_size = self.get_batch_size(obs_dict["obs"], batch_size)
 
@@ -312,7 +311,6 @@ class ImitatorPlayer(common_player.CommonPlayer):
             for n in range(self.max_steps):
                 t = n % self.task.context_length
                 if n > 0 and t == 0:
-                    print(n)
                     self.task._init_context(
                         self.task._reset_ref_motion_ids, self.task._cur_ref_motion_times
                     )
