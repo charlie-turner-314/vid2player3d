@@ -111,7 +111,7 @@ params:
 
   config:
     pretrained_model_cp: results/amass_im/models/Humanoid_latest.pth
-    name: Sinner
+    name: Kyrgios
     env_name: rlgpu
     multi_gpu: False
     ppo: True

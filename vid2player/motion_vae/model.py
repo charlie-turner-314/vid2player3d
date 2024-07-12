@@ -284,7 +284,6 @@ class PoseMixtureVAE(nn.Module):
             num_condition_frames,
             num_future_predictions,
         )
-
         self.encoder = Encoder(*encoder_args)
         self.decoder = MixedDecoder(*decoder_args, num_experts)
 

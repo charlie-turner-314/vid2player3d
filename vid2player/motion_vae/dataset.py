@@ -189,16 +189,14 @@ class Video3DPoseDataset(Dataset):
             joint_quat = self.joint_quat_arr.reshape(-1, 24 * 4)
             feature_all = concat(feature_all, joint_quat, axis=1)
         if "joint_rotmat" in opt.pose_feature:
-            print("Before", self.joint_rotmat_arr.reshape(-1, 24, 3, 3).copy().shape)
             joint_rotmat = (
                 rotmat_to_rot6d(
                     torch.from_numpy(self.joint_rotmat_arr.reshape(-1, 24, 3, 3).copy())
-                ).numpy()
-                # .reshape(-1, 24 * 6)
-                .reshape(-1, 6)
+                )
+                .numpy()
+                .reshape(-1, 24 * 6)
+                # .reshape(-1, 6)
             )
-            print("As rot6d", joint_rotmat.shape)
-            print("need to concat with:", feature_all.shape)
             feature_all = concat(feature_all, joint_rotmat, axis=1)
 
         feature_all = feature_all[np.logical_and(self.valid_arr, self.selected_arr)]
@@ -250,6 +248,7 @@ class Video3DPoseDataset(Dataset):
                 - self.joint_pos_arr[start : end - 1, :3]
             )
             feature = concat(feature, root_velo, axis=1)
+
         if "joint_pos" in opt.pose_feature:
             joint_pos = self.joint_pos_arr[start + 1 : end, 3:]
             feature = concat(feature, joint_pos, axis=1)
@@ -278,6 +277,7 @@ class Video3DPoseDataset(Dataset):
 
         if self.std is not None:
             feature = (feature - self.avg) / self.std
+
         data_dict = {
             "feature": feature,
             "start": start,

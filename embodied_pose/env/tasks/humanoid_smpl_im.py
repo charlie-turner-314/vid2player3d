@@ -543,15 +543,18 @@ class HumanoidSMPLIM(HumanoidSMPL):
         # get current motion id
         motion_id = self._reset_ref_motion_ids[0].item()
         # get the body position (xyz) (24 x 3)
-        body_pos = self._rigid_body_pos[0].cpu()
+        body_pos = self._rigid_body_pos[0].cpu().reshape([1, -1])
+        print(body_pos.shape)
         # get the body rotation (quaternion) (24 x 4)
         body_rot = self._rigid_body_rot[0].cpu()
         # get the linear body velocity (xyz) (24 x 3)
         # body_vel = self._rigid_body_vel[0]
         # convert body_rot from quaternion to euler angles
-        body_rot_euler = ypr_euler_from_quat(body_rot)
+        body_rot_euler = ypr_euler_from_quat(body_rot).reshape([1, -1])
         # also get the rotmat
-        body_rotmat = quaternion_to_rotation_matrix(body_rot)
+        body_rotmat = quaternion_to_rotation_matrix(body_rot).reshape([1, -1])
+        # now flatten body_rot
+        body_rot = body_rot.reshape([1, -1])
         # print out the shapes of them
         # export to joint_pos.npy
         file_path = os.path.join(dataset_dir, "joint_pos.npy")
@@ -569,6 +572,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
         else:
             joint_rot = body_rot_euler
         np.save(file_path, joint_rot)
+        print(joint_rot.shape)
         # export to joint_quat.npy
         file_path = os.path.join(dataset_dir, "joint_quat.npy")
         if os.path.exists(file_path):
@@ -578,12 +582,10 @@ class HumanoidSMPLIM(HumanoidSMPL):
             joint_quat = body_rot
         np.save(file_path, joint_quat)
         # export to joint_rotmat.npy
-        print(body_rotmat.shape)
         file_path = os.path.join(dataset_dir, "joint_rotmat.npy")
         if os.path.exists(file_path):
             joint_rotmat = np.load(file_path, allow_pickle=True)
-            joint_rotmat = np.concatenate((joint_rotmat, body_rotmat))
-            print(joint_rotmat.shape)
+            joint_rotmat = np.concatenate((joint_rotmat, body_rotmat), axis=0)
         else:
             joint_rotmat = body_rotmat
         np.save(file_path, joint_rotmat)

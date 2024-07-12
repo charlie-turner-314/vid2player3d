@@ -93,12 +93,13 @@ motion_vae_opt_dict = {
         "pose_feature": [
             "root_pos",
             "root_velo",
+            "joint_rotmat",
             "joint_pos",
             "joint_velo",
         ],  # ['root_pos', 'root_velo', 'joint_rotmat', 'joint_pos', 'joint_velo'],
         "update_joint_pos": False,
         "predict_phase": True,
-        "frame_size": 6,  # + 24 * 6 + 23 * 3 + 23 * 3,
+        "frame_size": 6 + 24 * 6 + 23 * 3 + 23 * 3,
         # "frame_size": 6 + 24 * 6 + 23 * 3 + 23 * 3,
         "num_condition_frames": 1,
         "num_future_predictions": 1,
@@ -124,7 +125,7 @@ motion_vae_opt_dict = {
         "player_name": ["Nadal"],
     },
     "kyrgios": {
-        "batch_size": 1,
+        "batch_size": 2,
         "nseqs": 1,
         "model_ver": "kyrgios",
         "base_opt_ver": "federer",

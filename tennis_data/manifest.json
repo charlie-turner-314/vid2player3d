@@ -7,6 +7,7 @@
     "sequences": {
       "fg": [
         {
+          "clip": "p1_h1",
           "handedness": "right",
           "base": 0,
           "player": "Kyrgios",
@@ -14,11 +15,22 @@
           "start": 0,
           "length": 143,
           "beta": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        },
+        {
+          "clip": "p1_h2",
+          "handedness": "right",
+          "base": 143,
+          "player": "Kyrgios",
+          "point_idx": 0,
+          "start": 0,
+          "length": 140,
+          "beta": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         }
       ]
     },
     "points_annotation": [
       {
+        "point_idx": 0,
         "keyframes": [
           { "fid": 0, "fg": false },
           { "fid": 75, "fg": true },
