@@ -333,7 +333,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
         print("sampled motion ids:", self._reset_ref_motion_ids)
 
         unique_motion_ids = np.unique(motion_ids)
-        unique_motion_ids.sort()
 
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
@@ -596,6 +595,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
 
         if os.path.isdir(motion_file):
             self.motion_lib_files = sorted(glob.glob(f"{motion_file}/*.pth"))
+            print(self.motion_lib_files)
             motion_file_range = self.cfg["env"].get("motion_file_range", None)
             if motion_file_range is not None:
                 self.motion_lib_files = self.motion_lib_files[

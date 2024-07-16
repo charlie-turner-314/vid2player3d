@@ -11,6 +11,7 @@ import yaml
 import joblib
 from . import torch_utils
 import torch
+
 try:
     from poselib.poselib.skeleton.skeleton3d import SkeletonMotion
     from poselib.poselib.core.rotation3d import *
@@ -155,6 +156,14 @@ class MotionLib:
         self.motion_ids = torch.arange(
             len(self._motion_lengths), dtype=torch.long, device=self._device
         )
+        # Sort everything by _motion_seq_names
+        seq_names = self._motion_seq_names
+        seq_ids = self._motion_seq_ids
+        sorted_names, sorted_ids = zip(
+            *sorted(zip(seq_names, seq_ids), key=lambda x: x[0])
+        )
+        self._motion_seq_names = list(sorted_names)
+        self._motion_seq_ids = torch.tensor(sorted_ids, device=self._device)
 
     def num_motions(self):
         return len(self.motion_ids)
