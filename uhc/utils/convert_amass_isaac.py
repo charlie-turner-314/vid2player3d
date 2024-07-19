@@ -118,13 +118,13 @@ for i, seq_arr in enumerate(motion_lib_seq_arr):
     seq_name_splits[i] = [seq_name.item()[2:] for seq_name in seq_arr]
 joblib.dump(seq_name_splits, f"{args.out_dir}/seq_name_splits.pkl")
 
-
 for i, motion_lib_seqs in enumerate(tqdm(motion_lib_seq_arr)):
 
     motion_lib_input_dict = dict()
 
     for key_name in motion_lib_seqs:
         key_name = key_name.item()
+        print(key_name)
         smpl_data_entry = amass_data[key_name]
         file_name = f"data/amass/singles/{key_name}.npy"
         seq_len = smpl_data_entry["pose_aa"].shape[0]

@@ -13,7 +13,10 @@ import learning.common_player as common_player
 
 class ImitatorPlayer(common_player.CommonPlayer):
     def __init__(self, config):
+        config["player"] = {"games_num" : 21}
+        print("Player INIT")
         BasePlayer.__init__(self, config)
+        print("Base player done")
         self.args = config["args"]
         self.task: HumanoidSMPLIMVis = self.env.task
         self.horizon_length = config["horizon_length"]
@@ -44,6 +47,7 @@ class ImitatorPlayer(common_player.CommonPlayer):
                     self.load_pretrained(cp)
             else:
                 self.load_pretrained(pretrained_model_cp)
+        print("Player Created")
 
     def restore(self, cp_name):
         if cp_name is not None and cp_name != "base":
@@ -324,7 +328,6 @@ class ImitatorPlayer(common_player.CommonPlayer):
                     action = self.get_action(obs_dict, is_determenistic)
 
                 obs_dict, r, done, info = self.env_step(self.env, action)
-
                 cr += r
                 steps += 1
 
@@ -394,9 +397,6 @@ class ImitatorPlayer(common_player.CommonPlayer):
                 done_indices = done_indices[:, 0]
 
                 prev_dones = done.clone()
-                if done[0]:
-                    print("done[0] apparently")
-                    break
 
         print(sum_rewards)
         if print_game_res:

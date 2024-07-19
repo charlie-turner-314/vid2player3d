@@ -53,7 +53,7 @@ class MotionVAEOption(object):
 
     # Test
     test_only = False
-    result_dir = "out/motionVAE"
+    result_dir = "../out/motionVAE"
     infer_racket = False
 
     def __init__(self):
@@ -125,8 +125,6 @@ motion_vae_opt_dict = {
         "player_name": ["Nadal"],
     },
     "kyrgios": {
-        "batch_size": 2,
-        "nseqs": 1,
         "model_ver": "kyrgios",
         "base_opt_ver": "federer",
         "handedness": "right",

@@ -14,6 +14,7 @@ import time
 from collections import defaultdict
 import logging
 import copy
+from tqdm import tqdm
 
 
 ###############################################################################
@@ -81,6 +82,7 @@ class MotionVAEModel(object):
         )
 
         if self.opt.mixed_phase_schedule:
+            print("Mixed Phase")
             opt_no_phase = copy.deepcopy(opt)
             opt_no_phase.predict_phase = False
             self.dataset_no_phase = Video3DPoseDataset(opt_no_phase)
@@ -124,12 +126,18 @@ class MotionVAEModel(object):
         train_loss_dict = defaultdict(float)
         num_batch_phase = 0
 
+        # check trainset has data, print first item
+        print("Trainset has {} batches".format(len(self.trainset)))
+
+
         for epoch in range(0, opt.n_epochs + opt.n_epochs_decay):
             epoch_start_time = time.time()
             if opt.mixed_phase_schedule:
                 trainset_no_phase_sampler = iter(self.trainset_no_phase)
+            
+            pbar = tqdm(enumerate(self.trainset), total=len(self.trainset), desc="Epoch {}".format(epoch))
 
-            for _, batch_data in enumerate(self.trainset):
+            for i, batch_data in pbar:
                 if opt.mixed_phase_schedule:
                     batch_data_no_phase = next(trainset_no_phase_sampler)
                     sample_phase = self.schedual_mixed_phase(epoch)
@@ -157,7 +165,13 @@ class MotionVAEModel(object):
                             self.writer.add_scalar(
                                 "train_loss/{}".format(k), v, total_iters
                             )
+                    #update progress bar desc to show loss
+                    s = "Epoch {:04} ".format(epoch)
+                    for k, v in train_loss_dict.items():
+                        s += "{}: {:.5f} ".format(k, v)
+                    pbar.set_description(s)
                     # print loss to console
+                    total_loss = sum(train_loss_dict.values())
                     self.print_loss(
                         epoch + 1,
                         total_iters,
@@ -166,6 +180,7 @@ class MotionVAEModel(object):
                     )
                     train_loss_dict = defaultdict(float)
                     num_batch_phase = 0
+
 
             # save latest model
             if not opt.no_log:
@@ -177,15 +192,6 @@ class MotionVAEModel(object):
                         % (epoch + 1, total_iters)
                     )
                     self.save_checkpoint(label="epoch_{}".format(epoch + 1))
-
-            logging.info(
-                "End of epoch %d / %d \t Time Taken: %d sec\n"
-                % (
-                    epoch + 1,
-                    opt.n_epochs + opt.n_epochs_decay,
-                    time.time() - train_start_time,
-                )
-            )
 
             if epoch > opt.n_epochs:
                 self.update_learning_rate()

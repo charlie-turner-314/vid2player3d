@@ -1,7 +1,7 @@
 name: PhysicsMVAEController
 test_name: MVAEControllerVis
 env:
-  numEnvs: 1024
+  numEnvs: 2560
   episodeLength: 600
   envSpacing: 5
   isFlagrun: False
@@ -13,7 +13,7 @@ env:
 
   physics:
     config: tennis_im
-    pretrained_model_cp: results/tennis_im/models/Sinner_latest.pth
+    pretrained_model_cp: results/tennis_im/models/Kyrgios_latest.pth
     name: HumanoidSMPLIMMVAE
     test_name: HumanoidSMPLIMMVAE
     assetFileName: smpl_mesh_humanoid_federer.xml
@@ -125,15 +125,15 @@ params:
     lr_schedule: constant
     score_to_win: 20000
     max_epochs: 1000
-    save_best_after: 50
-    save_frequency: 100
+    save_best_after: 10
+    save_frequency: 10
     print_stats: True
     entropy_coef: 0.0
     truncate_grads: True
     grad_norm: 50.0
     e_clip: 0.2
     horizon_length: 64
-    minibatch_size: 256
+    minibatch_size: 256 
     mini_epochs: 3
     critic_coef: 5
     clip_value: False

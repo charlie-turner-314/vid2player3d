@@ -3,6 +3,7 @@
 .vs/
 __pycache__/
 data
+tennis_data
 results
 out
 vid2player/tennis_dataset

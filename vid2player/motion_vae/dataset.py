@@ -116,12 +116,16 @@ class Video3DPoseDataset(Dataset):
                     for idx in range(seq["length"]):
                         fid = idx + seq["start"]
                         arr_idx = idx + seq["base"]
-                        prev_hit, next_hit = find_neighboring_hits(point, fid)
-                        phase = (fid - prev_hit["fid"]) / (
-                            next_hit["fid"] - prev_hit["fid"]
-                        )
-                        assert opt.side == "fg"
-                        phase += 1 if prev_hit["fg"] else 0  # add 1 if in recovery
+                        try:
+                            prev_hit, next_hit = find_neighboring_hits(point, fid)
+                            phase = (fid - prev_hit["fid"]) / (
+                                next_hit["fid"] - prev_hit["fid"]
+                            )
+                            assert opt.side == "fg"
+                            phase += 1 if prev_hit["fg"] else 0  # add 1 if in recovery
+                        except Exception as e:
+                            # assume phase is 0.5 if no hit is found
+                            phase = 0.5
                         self.phase_arr[arr_idx] = np.array(
                             [np.sin(phase * np.pi), np.cos(phase * np.pi)]
                         )

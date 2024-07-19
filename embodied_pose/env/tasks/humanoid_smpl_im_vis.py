@@ -142,7 +142,8 @@ class HumanoidSMPLIMVis(HumanoidSMPLIM):
 
     def convert_dof_pos_to_dof_euler(self, dof_pos):
         dof_quat = angle_axis_to_quaternion(dof_pos.view(-1, 3))
-        dof_euler = ypr_euler_from_quat(dof_quat)[..., [2, 1, 0]].reshape(-1)
+        dof_euler = ypr_euler_from_quat(dof_quat)
+        dof_euler = dof_euler[..., [2, 1, 0]].reshape(-1)
         return dof_euler
 
     def _sync_ref_motion(self, init=False):

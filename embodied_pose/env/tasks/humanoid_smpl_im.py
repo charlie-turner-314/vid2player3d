@@ -19,16 +19,23 @@ from isaacgym import gymapi
 from isaacgym import gymtorch
 from isaacgym.torch_utils import *
 
+from utils.motion_lib import MotionLib
+
 import torch
 from env.tasks.humanoid_smpl import HumanoidSMPL, dof_to_obs
+from poselib.skeleton.skeleton3d import SkeletonMotion, SkeletonState, SkeletonTree
+from scipy.spatial.transform import Rotation as sRot
 from utils.torch_transform import (
     heading_to_vec,
     angle_axis_to_rot6d,
-    ypr_euler_from_quat,
     quaternion_to_rotation_matrix,
+    rotation_matrix_to_angle_axis,
+    angle_axis_to_quaternion,
+    ypr_euler_from_quat
 )
 from utils import torch_utils
 from uhc.smpllib.smpl_local_robot import Robot
+from uhc.smpllib.smpl_parser import SMPL_BONE_ORDER_NAMES
 
 
 TMP_SMPL_DIR = f"/tmp/smpl_humanoid_{uuid4()}"
@@ -132,6 +139,12 @@ class HumanoidSMPLIM(HumanoidSMPL):
                 ind = self.body_names.index(body)
                 self.body_pos_weights[ind] = val
         self.n_steps = 0
+
+        if cfg['env'].get("export_dataset", None):
+            # delete npy files from the folder
+            dataset_dir = cfg['env']['export_dataset']
+            os.system(f"rm -rf {dataset_dir}/*.npy")
+
         return
 
     def register_model(self, model):
@@ -309,7 +322,9 @@ class HumanoidSMPLIM(HumanoidSMPL):
             self._reset_ref_motion_ids = (
                 torch.arange(self.num_envs, device=self._motion_lib._device)
                 % self._motion_lib.num_motions()
-            )
+            ) 
+            # sort 
+            self._reset_ref_motion_ids = torch.sort(self._reset_ref_motion_ids)[0]
         else:
             weights_from_lenth = self.cfg["env"].get(
                 "motion_weights_from_length", False
@@ -531,6 +546,10 @@ class HumanoidSMPLIM(HumanoidSMPL):
 
         if self.cfg["env"].get("export_dataset") is not None:
             self._export_frame()
+            self.n_steps = self.__dict__.get("n_steps", 0)
+            print("Steps:", self.n_steps)
+            self.n_steps += 1
+
 
         return
 
@@ -539,55 +558,95 @@ class HumanoidSMPLIM(HumanoidSMPL):
         dataset_dir = self.cfg["env"]["export_dataset"]
         if not os.path.exists(dataset_dir):
             os.makedirs(dataset_dir)
-        # get current motion id
-        motion_id = self._reset_ref_motion_ids[0].item()
-        # get the body position (xyz) (24 x 3)
-        body_pos = self._rigid_body_pos[0].cpu().reshape([1, -1])
-        print(body_pos.shape)
-        # get the body rotation (quaternion) (24 x 4)
-        body_rot = self._rigid_body_rot[0].cpu()
-        # get the linear body velocity (xyz) (24 x 3)
-        # body_vel = self._rigid_body_vel[0]
-        # convert body_rot from quaternion to euler angles
-        body_rot_euler = ypr_euler_from_quat(body_rot).reshape([1, -1])
-        # also get the rotmat
-        body_rotmat = quaternion_to_rotation_matrix(body_rot).reshape([1, -1])
-        # now flatten body_rot
-        body_rot = body_rot.reshape([1, -1])
-        # print out the shapes of them
-        # export to joint_pos.npy
-        file_path = os.path.join(dataset_dir, "joint_pos.npy")
+        for env in range(self.num_envs):
+            # work out if this env is done 
+            self._export_frame_env(env, dataset_dir)
+
+    def _export_frame_env(self, env, dataset_dir):
+        seq_name = self._motion_lib._motion_seq_names[self._reset_ref_motion_ids[env]] 
+
+        mujoco_joint_names = ['Pelvis', 'L_Hip', 'L_Knee', 'L_Ankle', 'L_Toe', 'R_Hip', 'R_Knee', 'R_Ankle', 'R_Toe', 'Torso', 'Spine', 'Chest', 'Neck', 'Head', 'L_Thorax', 'L_Shoulder', 'L_Elbow', 'L_Wrist', 'L_Hand', 'R_Thorax', 'R_Shoulder', 'R_Elbow', 'R_Wrist', 'R_Hand']
+        mujoco_2_smpl = [mujoco_joint_names.index(joint) for joint in SMPL_BONE_ORDER_NAMES if joint in mujoco_joint_names]
+        # Get the joint positions and rotations
+        joint_pos = self._rigid_body_pos[env].cpu().numpy()
+        root_rot = self._rigid_body_rot[env].cpu().numpy()[0].reshape(-1, 4) # In quaternion
+        dof_pos = self._dof_pos[env] 
+
+        root_rotvec = sRot.from_quat(root_rot).as_rotvec().reshape(1, 3) # NOTE: Want to say this is good now. 
+        rel_joint_rot = np.concatenate((root_rotvec, dof_pos.cpu().numpy().reshape(-1, 3)), axis=0)
+
+        # remap the joint positions and rotations to the SMPL order
+        # NOTE: not actually relative I don't think (maybe though?)
+        rel_joint_pos = joint_pos.reshape(1, -1) #[mujoco_2_smpl].reshape(1, -1)
+
+        rel_joint_rot = rel_joint_rot[mujoco_2_smpl]
+        # rel_joint_pos[0, 2] = 4
+
+        # convert the quaternions to rotation matrices
+        joint_rots = sRot.from_rotvec(rel_joint_rot)
+
+        joint_quat = joint_rots.as_quat().reshape(1, -1)
+        joint_rotmats = joint_rots.as_matrix().reshape(1, -1)
+
+        rel_joint_rot = rel_joint_rot.reshape(1, -1) #joint_rots.as_rotvec().reshape(1, -1)
+
+
+
+        # # We need each one relative to its smpl parent
+        # smpl_parents = self.smpl_parents.cpu().numpy()
+        # # Calculate relative rotations to each SMPL parent
+        # relative_rot_mats = np.zeros_like(joint_rots.as_matrix())
+        # for i in range(len(smpl_parents)):
+        #     parent_idx = smpl_parents[i]
+        #     if parent_idx == -1:  # The root joint has no parent
+        #         relative_rot_mats[i] = joint_rots[i].as_matrix()
+        #     else:
+        #         relative_rot_mats[i] = joint_rots[i].as_matrix() @ joint_rots[parent_idx].inv().as_matrix()       
+        #     # print the joint name and the parent joint name
+
+        # joint_rotmats = relative_rot_mats.reshape(1, -1)
+        # rel_joint_rot = sRot.from_matrix(relative_rot_mats).as_rotvec().reshape(1, -1)
+
+        # joint_quat = sRot.from_matrix(relative_rot_mats).as_quat().reshape(1, -1)
+
+
+        # Save the joint positions
+        file_path = os.path.join(dataset_dir, "{}_joint_pos.npy".format(seq_name))
         if os.path.exists(file_path):
             joint_pos = np.load(file_path, allow_pickle=True)
-            joint_pos = np.concatenate((joint_pos, body_pos), axis=0)
+            joint_pos = np.concatenate((joint_pos, rel_joint_pos), axis=0)
         else:
-            joint_pos = body_pos
+            joint_pos = rel_joint_pos
         np.save(file_path, joint_pos)
-        # export to joint_rot.npy
-        file_path = os.path.join(dataset_dir, "joint_rot.npy")
+
+        # Save the joint rotations
+        file_path = os.path.join(dataset_dir, "{}_joint_rot.npy".format(seq_name))
         if os.path.exists(file_path):
             joint_rot = np.load(file_path, allow_pickle=True)
-            joint_rot = np.concatenate((joint_rot, body_rot_euler), axis=0)
+            joint_rot = np.concatenate((joint_rot, rel_joint_rot), axis=0)
         else:
-            joint_rot = body_rot_euler
+            joint_rot = rel_joint_rot
         np.save(file_path, joint_rot)
-        print(joint_rot.shape)
-        # export to joint_quat.npy
-        file_path = os.path.join(dataset_dir, "joint_quat.npy")
+
+        # Save the joint quaternion rotations
+        file_path = os.path.join(dataset_dir, "{}_joint_quat.npy".format(seq_name))
         if os.path.exists(file_path):
-            joint_quat = np.load(file_path, allow_pickle=True)
-            joint_quat = np.concatenate((joint_quat, body_rot), axis=0)
+            joint_quat_out = np.load(file_path, allow_pickle=True)
+            joint_quat_out = np.concatenate((joint_quat_out, joint_quat), axis=0)
         else:
-            joint_quat = body_rot
-        np.save(file_path, joint_quat)
-        # export to joint_rotmat.npy
-        file_path = os.path.join(dataset_dir, "joint_rotmat.npy")
+            joint_quat_out = joint_quat
+        np.save(file_path, joint_quat_out)
+
+        # save the joint rotation matrices
+        file_path = os.path.join(dataset_dir, "{}_joint_rotmat.npy".format(seq_name))
         if os.path.exists(file_path):
-            joint_rotmat = np.load(file_path, allow_pickle=True)
-            joint_rotmat = np.concatenate((joint_rotmat, body_rotmat), axis=0)
+            joint_rotmats_out = np.load(file_path, allow_pickle=True)
+            joint_rotmats_out = np.concatenate((joint_rotmats_out, joint_rotmats), axis=0)
         else:
-            joint_rotmat = body_rotmat
-        np.save(file_path, joint_rotmat)
+            joint_rotmats_out = joint_rotmats
+        np.save(file_path, joint_rotmats_out)
+
+    
 
     def _load_motion(self, motion_file):
         gpu_motion_lib = self.cfg["env"].get("gpu_motion_lib", True)
@@ -595,7 +654,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
 
         if os.path.isdir(motion_file):
             self.motion_lib_files = sorted(glob.glob(f"{motion_file}/*.pth"))
-            print(self.motion_lib_files)
             motion_file_range = self.cfg["env"].get("motion_file_range", None)
             if motion_file_range is not None:
                 self.motion_lib_files = self.motion_lib_files[
@@ -604,7 +662,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
             motion_libs = [
                 torch.load(f, map_location=device) for f in self.motion_lib_files
             ]
-            self._motion_lib = motion_libs[0]
+            self._motion_lib:MotionLib = motion_libs[0]
             self._motion_lib.merge_multiple_motion_libs(motion_libs[1:])
             print(f"Loading motion files to {device}:")
             for f in self.motion_lib_files:

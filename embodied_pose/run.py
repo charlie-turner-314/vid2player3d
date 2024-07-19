@@ -196,9 +196,10 @@ def main():
 
     algo_observer = RLGPUAlgoObserver()
 
-    runner = build_alg_runner(algo_observer)
+    runner: Runner = build_alg_runner(algo_observer)
     runner.load(cfg_train)
     runner.reset()
+    print("About to RUN:")
     runner.run(vargs)
 
     return

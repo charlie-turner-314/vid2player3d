@@ -3,6 +3,8 @@ from motion_vae.dataset import Video3DPoseDataset  # , encode_action
 from utils.common import *
 from utils.racket import infer_racket_from_smpl
 
+from scipy.spatial.transform import Rotation as sRot
+
 from smpl_visualizer.vis_sport import SportVisualizer
 from smpl_visualizer.vis import vstack_videos
 from smpl_visualizer.smpl import SMPL, SMPL_MODEL_DIR
@@ -164,7 +166,16 @@ def test_motion_vae_randomwalk(
                     r
                 ].joint_rot_history  # N x 24 x 3
             trans_all[r, ...] = runner_dict[r].root_history  # N x 3
-        joint_rot_all[..., -1, :] = torch.FloatTensor([0, 0, np.pi / 2])
+        joint_rot_all[..., -1, :] = torch.FloatTensor([0, 0, np.pi / 2]) 
+
+        # apply the rotation here?
+        # rotation = sRot.from_euler("xyz", np.array([np.pi / 2, 0, 0]), degrees=False)
+        # for r in range(num_runner):
+        #     for i in range(nframes):
+        #         np_array = (rotation * sRot.from_rotvec(joint_rot_all[r, i, 0])).as_rotvec()
+        #         joint_rot_all[r, i, 0] = torch.from_numpy(np_array)
+
+
         if opt.infer_racket:
             smpl_motion = smpl(
                 global_orient=joint_rot_all[:, :, 0].reshape(-1, 3),

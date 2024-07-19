@@ -23,6 +23,7 @@ parser.add_argument("-to", "--test_only", action="store_true")
 parser.add_argument("-i", "--interactive", action="store_true")
 parser.add_argument("-n", "--nframes", action="store", type=int, default=1000)
 parser.add_argument("-a", "--nactors", action="store", type=int, default=5)
+parser.add_argument("-r", "--resume", action="store", help="Resume training from checkpoint --resume <checkpoint>")
 parser.add_argument("--ntests", action="store", type=int, default=1)
 parser.add_argument("--suffix", action="store", type=str, default="")
 

@@ -138,17 +138,25 @@ class MotionLib:
             "_motion_cam_proj",
         ]
 
+        mlib_seq_names = [mlib.__dict__["_motion_seq_names"] for mlib in motion_lib_arr]
+        sorted_ids = sorted(
+            range(len(mlib_seq_names)), key=lambda x: mlib_seq_names[x][0]
+        )
+
         for key in keys:
             if key not in self.__dict__ or self.__dict__[key] is None:
                 continue
 
             if key == "_motion_seq_names":
-                for mlib in motion_lib_arr:
-                    self.__dict__[key].extend(mlib.__dict__[key])
+                for id in sorted_ids:
+                    self.__dict__[key].extend(motion_lib_arr[id].__dict__[key])
             else:
                 arr = [self.__dict__[key]] + [
-                    mlib.__dict__[key] for mlib in motion_lib_arr
+                    mlib.__dict__[key] for mlib in [motion_lib_arr[i] for i in sorted_ids]
                 ]
+                # arr = [self.__dict__[key]] + [
+                #     mlib.__dict__[key] for mlib in motion_lib_arr
+                # ]
                 self.__dict__[key] = torch.cat(arr, dim=0)
 
         self.generate_length_starts()
@@ -156,14 +164,6 @@ class MotionLib:
         self.motion_ids = torch.arange(
             len(self._motion_lengths), dtype=torch.long, device=self._device
         )
-        # Sort everything by _motion_seq_names
-        seq_names = self._motion_seq_names
-        seq_ids = self._motion_seq_ids
-        sorted_names, sorted_ids = zip(
-            *sorted(zip(seq_names, seq_ids), key=lambda x: x[0])
-        )
-        self._motion_seq_names = list(sorted_names)
-        self._motion_seq_ids = torch.tensor(sorted_ids, device=self._device)
 
     def num_motions(self):
         return len(self.motion_ids)

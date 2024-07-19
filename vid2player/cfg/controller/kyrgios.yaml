@@ -13,7 +13,7 @@ env:
 
   physics:
     config: tennis_im
-    pretrained_model_cp: results/tennis_im/models/Sinner_latest.pth
+    pretrained_model_cp: results/tennis_im/models/Kyrgios_latest.pth
     name: HumanoidSMPLIMMVAE
     test_name: HumanoidSMPLIMMVAE
     assetFileName: smpl_mesh_humanoid_federer.xml
