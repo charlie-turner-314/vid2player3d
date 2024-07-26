@@ -1,8 +1,8 @@
 name: PhysicsMVAEController
 test_name: MVAEControllerVis
 env:
-  numEnvs: 2560
-  episodeLength: 600
+  numEnvs: 3584
+  episodeLength: 150
   envSpacing: 5
   isFlagrun: False
   enableDebugVis: False
@@ -24,15 +24,15 @@ env:
     mvae_ver: kyrgios
     player: kyrgios
     grip: eastern
-    court_min: [-5, -16]
-    court_max: [5, -10]
+    court_min: [-7, -16]
+    court_max: [7, -8]
     racket_friction: 0.8
     ball_friction: 0.2
     restitution: 0.9
     spin_scale: 5
 
     reward_weights: { "pos": 1 }
-    reward_scales: { "pos": 5, "phase": 10 }
+    reward_scales: { "pos": 7, "phase": 10 }
     reward_type: reach
     ball_traj_out_x_file: data/ball_traj/ball_traj_out_x.npy
     ball_traj_out_y_file: data/ball_traj/ball_traj_out_y.npy
@@ -125,8 +125,8 @@ params:
     lr_schedule: constant
     score_to_win: 20000
     max_epochs: 1000
-    save_best_after: 10
-    save_frequency: 10
+    save_best_after: 50 
+    save_frequency: 50
     print_stats: True
     entropy_coef: 0.0
     truncate_grads: True
@@ -140,3 +140,5 @@ params:
     seq_len: 4
     bounds_loss_coef: 10
     clip_actions_val: 5.0
+    pretrained_model_cp: results/kyrgios_train_stage_0/models/tennis_v1_best.pth
+    discard_pretrained_sigma: True

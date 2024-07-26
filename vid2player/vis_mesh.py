@@ -1,3 +1,8 @@
+"""
+CHARLIE CODE - Visualise from processed SMPL format data
+"""
+
+
 import sys
 
 import os
@@ -12,7 +17,7 @@ from utils.racket import infer_racket_from_smpl
 
 
 def visualize_motion(
-    num_test, nframes, joint_rot_all, joint_pos_all, betas, trans_all, interactive=False
+    num_test, nframes, joint_rot_all, joint_pos_all, betas, trans_all, filename="motionvis.mp4", interactive=False
 ):
     """
     Visualize motion using the provided body rotations, positions, and betas.
@@ -89,7 +94,7 @@ def visualize_motion(
             "camera": "front",
             "racket_seq": racket_all,
         }
-        vid_path = os.path.join(result_sub_dir, "random_front.mp4")
+        vid_path = os.path.join(result_sub_dir, filename)
         if interactive:
             visualizer.show_animation(
                 init_args=init_args,
@@ -111,130 +116,49 @@ def visualize_motion(
 # Example usage
 # Make sure to pass your arrays `joint_rot_all`, `joint_pos_all`, `betas`, `trans_all`
 # # visualize_motion(1, joint_rot_all.shape[0], joint_rot_all, joint_pos_all, betas, trans_all)
-joint_rot_all = np.load(
-    "/home/charlie/Documents/ATPIL/Training/vid2player3d/tennis_data/file_res_p0_h1_joint_rot.npy"
-).reshape(1, -1, 24, 3)
-joint_pos_all = np.load(
-    "/home/charlie/Documents/ATPIL/Training/vid2player3d/tennis_data/file_res_p0_h1_joint_pos.npy"
-).reshape(1, -1, 24, 3)
-betas = np.zeros((10), dtype=np.float32)
-# trans is just the root position
-trans_all = joint_pos_all[:, :, 0, :]
-# print(trans_all[:, :70, ...].round(2))
-# print(joint_rot_all.shape)
-# print(joint_rot_all[:, :70, 1, :].round(2))
+# files = os.listdir("/home/charlie/Documents/ATPIL/Training/vid2player3d/tennis_data")
+# clips = set([tuple(f.split("_")[2:4]) for f in files])
+# clips = sorted(list(clips))
+# clips = clips[1:]
+# for point, hit in clips:
+#     print(f"Processing {point}_{hit}", end="... ")
+#     joint_rot_all = np.load(
+#         f"/home/charlie/Documents/ATPIL/Training/vid2player3d/tennis_data/file_res_{point}_{hit}_joint_rot.npy"
+#     ).reshape(1, -1, 24, 3)
+#     joint_pos_all = np.load(
+#         f"/home/charlie/Documents/ATPIL/Training/vid2player3d/tennis_data/file_res_{point}_{hit}_joint_pos.npy"
+#     ).reshape(1, -1, 24, 3)
+#     betas = np.zeros((10), dtype=np.float32)
+#     # trans is just the root position
+#     trans_all = joint_pos_all[:, :, 0, :]
 
 
-# Convert joint_quat_all to joint_rot_all (quaternion to axis-angle)
-# print(joint_quat_all.shape)
-# joint_rot_all = np.zeros((1, joint_quat_all.shape[0], 24, 3))
-# for i in range(joint_quat_all.shape[0]):
-#     for j in range(joint_quat_all.shape[1]):
-#         r = R.from_quat(joint_quat_all[i, j])
-#         joint_rot_all[0, i, j] = r.as_rotvec()
-# # print(joint_rot_all.shape)
-
-# print(joint_rot_all[:, :70, 1, :].round(2))
-
-
-# # # # Option 2: Open original data
-# import joblib
-
-# with open(
-#     "/home/charlie/Documents/Kyrgios_Medvedev_2022/processed/processed_data.pkl", "rb"
-# ) as f:
-#     data = joblib.load(f)
-
-# data = data["file_res_p0_h1"]
-
-# # # we have trans, pose_aa, betas
-# trans_all = data['trans'].reshape(1, -1, 3)
-# joint_rot_all = data["pose_aa"].reshape(1, -1, 24, 3)
-# betas = data['beta']
-# joint_pos_all = np.ndarray([])
-# print("*" * 50)
-# print(trans_all.round(2))
-# print(joint_rot_all[:, :70, 1, :].round(2))
-
-# exit()
-# print("trans_all:", trans_all.shape)
-
-# print("Shapes:")
-# print("joint_rot:", joint_rot_all.shape)
-# print("betas:", betas.shape)
-# print("joint_pos_all:", joint_pos_all.shape)
-
-# # visualise the rotations as an animation
-# import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
-
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection="3d")
-# for i in range(joint_rot_all.shape[1]):
-#     ax.cla()
-#     # as angle-axis
-#     ax.quiver(
-#         np.zeros(24),
-#         np.zeros(24),
-#         np.zeros(24),
-#         joint_rot_all[0, i, :, 0],
-#         joint_rot_all[0, i, :, 1],
-#         joint_rot_all[0, i, :, 2],
+#     visualize_motion(
+#         1,
+#         joint_rot_all.shape[1],
+#         torch.from_numpy(joint_rot_all).float(),
+#         torch.from_numpy(joint_pos_all),
+#         torch.from_numpy(betas).float(),
+#         torch.from_numpy(trans_all).float(),
+#         filename=f"{point}_{hit}.mp4"
 #     )
-#     # as euler angles
-#     ax.set_xlim([-1, 1])
-#     ax.set_ylim([-1, 1])
-#     ax.set_zlim([-1, 1])
-#     plt.pause(0.1)
-#     plt.show()
+#     print("Done.")
+import joblib
 
-
-# exit()
-
-
-visualize_motion(
-    1,
-    joint_rot_all.shape[1],
-    torch.from_numpy(joint_rot_all).float(),
-    torch.from_numpy(joint_pos_all),
-    torch.from_numpy(betas).float(),
-    torch.from_numpy(trans_all).float(),
-)
-
-
-
-# Visualise the joint_pos in 3d for the first frame
-
-# import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
-
-# frame = 170
-
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection="3d")
-# ax.scatter(joint_pos_all[0, frame, :, 0], joint_pos_all[0, frame, :, 1], joint_pos_all[0, frame, :, 2])
-
-# # annotate 
-# for i in range(joint_pos_all.shape[2]):
-#     ax.text(joint_pos_all[0, frame, i, 0], joint_pos_all[0, frame, i, 1], joint_pos_all[0, frame, i, 2], str(i))
-
-# lines = [
-#     (0, 1, 2, 3, 4), # left leg
-#     (0, 5, 6, 7, 8), # right leg
-#     (0, 9, 10, 11, 12), # spine
-#     (11, 14, 15, 16), # left arm
-#     (11, 19, 20, 21), # right arm
-#     (12, 13, 22, 23, 18, 17, 13), # head
-# ]
-
-# for line in lines:
-#     ax.plot(
-#         joint_pos_all[0, frame, line, 0],
-#         joint_pos_all[0, frame, line, 1],
-#         joint_pos_all[0, frame, line, 2],
-#         color="black",
-#     )
-
-
-# plt.show()
-
+motion_dict = joblib.load("/home/charlie/Documents/Kyrgios_Medvedev_2022/processed/processed_data.pkl")
+for key in motion_dict:
+    print(motion_dict[key].keys())
+    trans_all = motion_dict[key]["trans"]
+    joint_rot_all = motion_dict[key]["pose_aa"]
+    print(joint_rot_all.shape)
+    joint_pos_all = motion_dict[key]["pose_aa"]
+    betas = motion_dict[key]["beta"]
+    visualize_motion(
+        1,
+        joint_rot_all.shape[0],
+        torch.from_numpy(joint_rot_all).float(),
+        torch.from_numpy(joint_pos_all),
+        torch.from_numpy(betas).float(),
+        torch.from_numpy(trans_all).float(),
+        filename=f"video/{key}.mp4",
+    )

@@ -1,7 +1,7 @@
 name: HumanoidSMPLIM
 test_name: HumanoidSMPLIMVis
 env: 
-  numEnvs: 4096
+  numEnvs: 2048 
   envSpacing: 5
   episodeLength: 300
   isFlagrun: False
@@ -126,7 +126,7 @@ params:
     learning_rate: 2e-5
     lr_schedule: constant
     score_to_win: 20000
-    max_epochs: 10000
+    max_epochs: 15000
     save_best_after: 50
     save_frequency: 200
     print_stats: True
@@ -135,8 +135,8 @@ params:
     grad_norm: 50.0
     e_clip: 0.2
     horizon_length: 32
-    minibatch_size: 512
-    mini_epochs: 6
+    minibatch_size: 128 
+    mini_epochs: 20
     critic_coef: 5
     clip_value: False
     seq_len: 4

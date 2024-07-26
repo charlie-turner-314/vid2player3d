@@ -288,7 +288,7 @@ class ImitatorAgent(common_agent.CommonAgent):
                         aux_str = "\t" + aux_str
 
                     print(
-                        "{}\tT_play {:.2f}\tT_update {:.2f}\tETA {}\tstep_rewards {:.4f} {}{}\teps_len {:.2f}\talive {:.2f}\tfps step {}\tfps total {}\t{}".format(
+                        "{}\tT_play {:.2f}\tT_update {:.2f}\tETA {}\tstep_rewards {:.4f} {}{}\teps_len {:.2f}\talive {:.2f}\tfps step {}\tlr {}\t{}".format(
                             epoch_num,
                             play_time,
                             update_time,
@@ -303,7 +303,7 @@ class ImitatorAgent(common_agent.CommonAgent):
                             mean_lengths,
                             self.alive_ratio,
                             fps_step,
-                            fps_total,
+                            self.last_lr,
                             self.config["args"].cfg,
                         )
                     )
@@ -382,6 +382,34 @@ class ImitatorAgent(common_agent.CommonAgent):
                     )
 
                 self.algo_observer.after_print_stats(frame, epoch_num, total_time)
+
+                # write logs to tensorboard
+                if not (args.tmp or args.no_log):
+                    self.writer.add_scalar("rewards/step_rewards", self.step_rewards.avg, frame)
+                    for i, name in enumerate(self.sub_rewards_names.split(",")):
+                        self.writer.add_scalar(
+                            f"rewards/sub_rewards/{name}", self.step_sub_rewards.avg[i], frame
+                        )
+                    # alive ratio
+                    self.write_stats(
+                        total_time, 
+                        epoch_num, 
+                        scaled_play_time, 
+                        play_time, 
+                        update_time, 
+                        train_info["actor_loss"], 
+                        train_info["critic_loss"], 
+                        train_info["entropy"], 
+                        train_info["kl"],
+                        self.last_lr, 
+                        train_info["lr_mul"][-1],
+                        frame, 
+                        scaled_time, 
+                        scaled_play_time, 
+                        curr_frames
+                    )
+
+
 
                 if self.game_rewards.current_size > 0:
                     mean_rewards = self._get_mean_rewards()

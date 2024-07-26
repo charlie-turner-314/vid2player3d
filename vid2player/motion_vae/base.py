@@ -52,7 +52,7 @@ class MotionVAEModel(object):
             self.model.eval()
 
         self.checkpoint_dir = os.path.join(opt.checkpoint_dir, opt.model_ver)
-        if not opt.test_only and not opt.continue_train:
+        if not opt.test_only and not opt.resume:
             if os.path.exists(self.checkpoint_dir):
                 logging.warning("Checkpoint already exists!")
                 # raise Exception("Checkpoint already exists!")
@@ -66,8 +66,8 @@ class MotionVAEModel(object):
         if not opt.no_log:
             self.writer = SummaryWriter(os.path.join(self.checkpoint_dir, "logs"))
 
-        if opt.continue_train:
-            self.load_checkpoint()
+        if opt.resume:
+            self.load_checkpoint(label=opt.checkpoint)
             logging.info("Continue training with latest model")
 
         self.dataset = Video3DPoseDataset(opt)
@@ -192,6 +192,10 @@ class MotionVAEModel(object):
                         % (epoch + 1, total_iters)
                     )
                     self.save_checkpoint(label="epoch_{}".format(epoch + 1))
+                    print(
+                        "Saved the latest model (epoch %d, total_iters %d)\n"
+                        % (epoch + 1, total_iters)
+                    )
 
             if epoch > opt.n_epochs:
                 self.update_learning_rate()
@@ -210,9 +214,16 @@ class MotionVAEModel(object):
         batch_phase = None
         if batch_data.get("phase") is not None:
             batch_phase = batch_data["phase"].float().to(self.device)
+            assert not torch.isnan(batch_phase).any(), "Phase contains NaN"
+            assert not torch.isinf(batch_phase).any(), "Phase contains Inf"
         batch_action = None
         if batch_data.get("action") is not None:
             batch_action = batch_data["action"].float().to(self.device)
+            assert not torch.isnan(batch_action).any(), "Action contains NaN"
+            assert not torch.isinf(batch_action).any(), "Action contains Inf"
+
+        assert not torch.isnan(batch_feature).any(), "Feature contains NaN"
+        assert not torch.isinf(batch_feature).any(), "Feature contains Inf"
 
         self.model.train()
         self.optimizer.zero_grad()
@@ -243,6 +254,7 @@ class MotionVAEModel(object):
                 (output, output_phase, _, _), loss_dict = self.feed_vae(
                     gt_feature, condition, gt_phase, gt_action
                 )
+            
 
             # backward pass
             self.optimizer.zero_grad()
@@ -259,6 +271,11 @@ class MotionVAEModel(object):
                 loss_dict_seq[k] += v.item()
 
         for k, v in loss_dict_seq.items():
+            if ((L - S - T + 1)) == 0:
+                print("L: ", L)
+                print("S: ", S)
+                print("T: ", T)
+                raise Exception("Division by zero")
             loss_dict_seq[k] = v / ((L - S - T + 1))
         return loss_dict_seq
 
@@ -271,6 +288,11 @@ class MotionVAEModel(object):
                 [condition, gt_action.flatten(start_dim=1, end_dim=2)], dim=1
             )
 
+        if np.isnan(flattened_truth.cpu()).any():
+            print("Ground Truth contains NaN")
+            print(ground_truth)
+            raise Exception("Ground Truth contains NaN")
+
         output, mu, logvar = self.model(flattened_truth, condition)
         output_phase = None
         if not opt.predict_phase:
@@ -279,12 +301,30 @@ class MotionVAEModel(object):
             output = output.view(-1, opt.num_future_predictions, opt.frame_size + 2)
             output_phase = output[:, :, -2:]
             output = output[:, :, :-2]
+        
+        if np.isnan(output.detach().cpu().numpy()).any():
+            print("Output contains NaN")
+            print(output)
+            raise Exception("Output contains NaN")
 
         kl_loss = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum().clamp(max=0)
         kl_loss /= logvar.numel()
+        if np.isnan(kl_loss.cpu().item()):
+            print("KL Loss is NaN")
+            print(mu)
+            print(logvar)
+            print(logvar.exp())
+            print(logvar.numel())
+            raise Exception("KL Loss is NaN")
 
         recon_feature_loss = (output - ground_truth.detach()).pow(2).mean(dim=(0, -1))
         recon_feature_loss = recon_feature_loss.mul(self.future_weights).sum()
+        if np.isnan(recon_feature_loss.cpu().item()):
+            print("Recon Feature Loss is NaN")
+            print(output)
+            print(ground_truth)
+            print(self.future_weights)
+            raise Exception("Recon Feature Loss is NaN")
 
         if opt.predict_phase and gt_phase is not None:
             recon_phase_loss = (
@@ -341,6 +381,7 @@ class MotionVAEModel(object):
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
         logging.info("update learning rate: %f -> %f" % (self.old_lr, lr))
+        print("update learning rate: %f -> %f" % (self.old_lr, lr))
         self.old_lr = lr
 
     def schedual_regressive_training(self, epoch):

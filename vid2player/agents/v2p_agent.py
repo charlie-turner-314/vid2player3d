@@ -143,7 +143,7 @@ class V2PAgent(common_agent.CommonAgent):
                     fps_step = curr_frames // scaled_play_time
                     fps_total = curr_frames // scaled_time
                     mean_lengths = self.game_lengths.get_mean() if self.game_rewards.current_size > 0 else 0
-                    print('{}\tT_play {:.2f}\tT_update {:.2f}\tETA {}\tstep_rewards {:.4f} {}\teps_len {:.2f}\tfps step {}\tfps total {}\t{}'
+                    print('{}\tT_play {:.2f}\tT_update {:.2f}\tETA {}\tstep_rewards {:.10f} {}\teps_len {:.2f}\tfps step {}\tfps total {}\t{}'
                           .format(epoch_num, play_time, update_time, get_eta_str(epoch_num, self.max_epochs, sum_time), self.step_rewards.avg.item(),
                                     np.array2string(self.step_sub_rewards.avg.cpu().numpy(), formatter={'all': lambda x: '%.4f' % x}, separator=',') \
                                         if self.sub_rewards_names is not None else '',
@@ -265,6 +265,7 @@ class V2PAgent(common_agent.CommonAgent):
             if infos['sub_rewards'] is not None:
                 self.step_sub_rewards.update(infos['sub_rewards'].mean(dim=0))
                 self.sub_rewards_names = infos['sub_rewards_names']
+                self.writer.add_scalar('step_sub_rewards', self.step_sub_rewards.avg[0], self.frame)
             # NOTE: only save the last step's info for simplicity
             self.infos = infos
 

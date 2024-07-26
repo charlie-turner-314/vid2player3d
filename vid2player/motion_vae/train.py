@@ -3,6 +3,8 @@ from motion_vae.base import MotionVAEModel
 from motion_vae.test import test_motion_vae_randomwalk
 from argparse import ArgumentParser
 
+import logging
+
 
 parser = ArgumentParser()
 parser.add_argument(
@@ -23,7 +25,8 @@ parser.add_argument("-to", "--test_only", action="store_true")
 parser.add_argument("-i", "--interactive", action="store_true")
 parser.add_argument("-n", "--nframes", action="store", type=int, default=1000)
 parser.add_argument("-a", "--nactors", action="store", type=int, default=5)
-parser.add_argument("-r", "--resume", action="store", help="Resume training from checkpoint --resume <checkpoint>")
+parser.add_argument("-r", "--resume", action="store_true", help="Resume training", default=False)
+parser.add_argument("-c", "--checkpoint", action="store", help="Checkpoint to restore if resume", default="latest")
 parser.add_argument("--ntests", action="store", type=int, default=1)
 parser.add_argument("--suffix", action="store", type=str, default="")
 
@@ -43,6 +46,9 @@ if __name__ == "__main__":
             opt.nseqs = 1000
             opt.no_log = True
         opt.no_log = args.no_log
+        opt.resume = args.resume
+        opt.checkpoint = args.checkpoint
+
 
         if not args.test_only:
             motion_vae = MotionVAEModel(opt)

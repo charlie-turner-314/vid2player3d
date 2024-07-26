@@ -124,7 +124,7 @@ params:
     gamma: 0.99
     tau: 0.95
     learning_rate: 1e-5
-    lr_schedule: constant
+    lr_schedule: None
     score_to_win: 20000
     max_epochs: 10000
     save_best_after: 50

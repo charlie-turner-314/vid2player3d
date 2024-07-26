@@ -46,9 +46,14 @@ class Video3DPoseDataset(Dataset):
             )
         # CHARLIE:
         # valid_arr is used to filter out invalid frames ( no idea what that is)
-        # lets hack this for now and make all frames valid
         # self.valid_arr = np.load(os.path.join(opt.dataset_dir, "valid.npy"))
         self.valid_arr = np.ones(self.joint_pos_arr.shape[0], dtype=bool)
+        # I've worked out 2 clips are invalid: p0000_h0010 and p0001_h0007
+        invalid_clips = ["p0000_h0010", "p0001_h0007"]
+        for clip in invalid_clips:
+            # work out which frames (from manifest) are in the clip
+            pass
+
 
         self.sequences = []
         self.selected_arr = np.zeros_like(self.valid_arr)
@@ -57,12 +62,13 @@ class Video3DPoseDataset(Dataset):
             self.phase_rad_arr = np.zeros(self.valid_arr.shape[0], dtype=float)
 
         def find_neighboring_hits(point, fid):
-            # Find the two hits that are closest to the given frame id
             assert fid <= point[-1]["fid"]
             for hid, hit in enumerate(point):
-                if fid == point[hid + 1]["fid"] and hid == 0:
-                    return point[hid + 1], point[hid + 2]
-                if fid >= hit["fid"] and fid <= point[hid + 1]["fid"]:
+                if fid == point[hid + 1]["fid"] and hid == 0: 
+                    # fid is the first frame of the next hit and this is the first hit
+                    return point[hid + 1], point[hid + 2] # Return same hit and next hit
+                if fid >= hit["fid"] and fid <= point[hid + 1]["fid"]: 
+                    # If frame id
                     return hit, point[hid + 1]
 
         num_videos = 0
@@ -113,9 +119,9 @@ class Video3DPoseDataset(Dataset):
                         debug("Not orig, needs to be")
                         continue
                     point = video["points_annotation"][seq["point_idx"]]["keyframes"]
-                    for idx in range(seq["length"]):
-                        fid = idx + seq["start"]
-                        arr_idx = idx + seq["base"]
+                    for idx in range(seq["length"]): # for every frame in the sequence
+                        fid = idx + seq["start"] # Frame ID (within point)
+                        arr_idx = idx + seq["base"] # Base is the index of the first frame of the sequence in the whole dataset
                         try:
                             prev_hit, next_hit = find_neighboring_hits(point, fid)
                             phase = (fid - prev_hit["fid"]) / (

@@ -1,4 +1,5 @@
 from players.mvae_player import MVAEPlayer
+from players.im_player import ImitatorPlayer
 from env.utils.player_builder import PlayerBuilder
 from utils.tennis_ball_out_estimator import TennisBallOutEstimator
 from utils.common import AverageMeter

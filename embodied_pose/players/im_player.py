@@ -13,7 +13,7 @@ import learning.common_player as common_player
 
 class ImitatorPlayer(common_player.CommonPlayer):
     def __init__(self, config):
-        config["player"] = {"games_num" : 21}
+        config["player"] = {"games_num" : 41}
         print("Player INIT")
         BasePlayer.__init__(self, config)
         print("Base player done")
