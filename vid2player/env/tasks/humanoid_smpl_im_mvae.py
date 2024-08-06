@@ -795,6 +795,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
         # debug viz
         if self.viewer and self.debug_viz:
             self._update_debug_viz()
+        
 
     def _update_state_from_sim(self):
         if self.cfg['sim'].get('substeps', 2) > 2:

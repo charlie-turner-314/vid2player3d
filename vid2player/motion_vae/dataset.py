@@ -62,14 +62,17 @@ class Video3DPoseDataset(Dataset):
             self.phase_rad_arr = np.zeros(self.valid_arr.shape[0], dtype=float)
 
         def find_neighboring_hits(point, fid):
-            assert fid <= point[-1]["fid"]
+            # can only predict phase within the hits of the point
+            # e.g if hits are at [10, 15, 20], we can only predict phase between 10 and 20 even if there is motion outside that
+            if fid < point[0]["fid"] or fid > point[-1]["fid"]:
+                return None, None
             for hid, hit in enumerate(point):
                 if fid == point[hid + 1]["fid"] and hid == 0: 
                     # fid is the first frame of the next hit and this is the first hit
                     return point[hid + 1], point[hid + 2] # Return same hit and next hit
                 if fid >= hit["fid"] and fid <= point[hid + 1]["fid"]: 
-                    # If frame id
-                    return hit, point[hid + 1]
+                    # If frame id is between the current hit and the next hit
+                    return hit, point[hid + 1] # Return current hit and next hit
 
         num_videos = 0
         betas = []
@@ -120,31 +123,37 @@ class Video3DPoseDataset(Dataset):
                         continue
                     point = video["points_annotation"][seq["point_idx"]]["keyframes"]
                     for idx in range(seq["length"]): # for every frame in the sequence
-                        fid = idx + seq["start"] # Frame ID (within point)
-                        arr_idx = idx + seq["base"] # Base is the index of the first frame of the sequence in the whole dataset
-                        try:
-                            prev_hit, next_hit = find_neighboring_hits(point, fid)
-                            phase = (fid - prev_hit["fid"]) / (
-                                next_hit["fid"] - prev_hit["fid"]
-                            )
-                            assert opt.side == "fg"
-                            phase += 1 if prev_hit["fg"] else 0  # add 1 if in recovery
-                        except Exception as e:
-                            # assume phase is 0.5 if no hit is found
-                            phase = 0.5
+                        fid = idx + seq["base"]        # Frame ID (within point)
+                        arr_idx = idx + seq["base"]     # Base is the index of the first frame of the sequence in the whole dataset
+                        prev_hit, next_hit = find_neighboring_hits(point, fid)
+                        if prev_hit is None or next_hit is None:
+                            # set this frame to invalid
+                            self.valid_arr[arr_idx] = False
+                            continue
+                        phase = (fid - prev_hit["fid"]) / (
+                            next_hit["fid"] - prev_hit["fid"]
+                        )
+                        assert opt.side == "fg"
+                        phase += 1 if prev_hit["fg"] else 0  # add 1 if in recovery
                         self.phase_arr[arr_idx] = np.array(
                             [np.sin(phase * np.pi), np.cos(phase * np.pi)]
                         )
                         self.phase_rad_arr[arr_idx] = phase * np.pi
                     seq["has_phase"] = True
+                    # plot the phase rad array and save as a plot phase.png
+                    from matplotlib import pyplot as plt
+                    plt.plot(self.phase_rad_arr)
+                    plt.savefig("phase.png")
+                    plt.close()
 
                 self.sequences += [seq]
                 self.selected_arr[seq["base"] : seq["base"] + seq["length"]] = 1
                 betas += [seq["beta"]]
 
+
         num_valid_frames = np.logical_and(self.valid_arr, self.selected_arr).sum()
         print(
-            f"Loaded {len(self.sequences)} motion sequences from {num_videos} videos containing {num_valid_frames} frames"
+            f"Loaded {len(self.sequences)} motion sequences from {num_videos} videos containing {num_valid_frames}/{np.sum(self.selected_arr)} valid frames"
         )
 
         self.std, self.avg = None, None

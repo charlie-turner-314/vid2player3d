@@ -14,6 +14,7 @@ from utils.tennis_ball_out_estimator import TennisBallOutEstimator
 from utils.common import AverageMeter
 from utils.torch_transform import quat_to_rot6d
 from utils import torch_utils
+from utils.common import get_opponent_env_ids
 
 import torch
 import math
@@ -185,8 +186,6 @@ class PhysicsSelfPlayController:
         return self._num_actor_obs
 
     def create_sim(self):
-        assert self.num_envs % 2 == 0, "Need even envs for self-play"
-
         # Set the betas
         self.betas = (
             torch.FloatTensor(self.cfg_v2p["smpl_beta"])
@@ -194,7 +193,7 @@ class PhysicsSelfPlayController:
             .to(self.device)
         )
 
-        # MOTION PLAYER
+        # MOTION PLAYERS
         print("CREATING MVAE PLAYERS")
         self._mvae_player = MVAEPlayer(
             self.cfg_v2p,
@@ -214,6 +213,7 @@ class PhysicsSelfPlayController:
         self._physics_player.task._mvae_player = self._mvae_player
         self._physics_player.task._controller = self
 
+        # Size of the Agent's Observations
         self._num_actor_obs = 3 + 3 + 24 * 3 + 24 * 6 + 3
         # NOTE: Don't know what this 32 is (latent space size methinks)
         self._num_mvae_action = self._num_actions = 32
@@ -225,9 +225,12 @@ class PhysicsSelfPlayController:
             self._num_actions += 3
 
         self.cfg["env"]["numActions"] = self.get_action_size()
+        # Num Observations = Actor Observations + Task Observations
         self.cfg["env"]["numObservations"] = (
-            self.get_actor_obs_size() + self.get_task_obs_size()
+            self.get_actor_obs_size() 
+            + self.get_task_obs_size()
         )
+
 
     def get_task_obs_size(self):
         self._num_task_obs = 3 * self.cfg_v2p.get("obs_ball_traj_length", 100)

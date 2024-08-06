@@ -111,6 +111,7 @@ params:
   load_checkpoint: False
 
   config:
+    pretrained_model_cp: results/tennis_im_before/models/Kyrgios_latest.pth
     name: Humanoid
     env_name: rlgpu
     multi_gpu: False
@@ -126,7 +127,7 @@ params:
     learning_rate: 2e-5
     lr_schedule: constant
     score_to_win: 20000
-    max_epochs: 15000
+    max_epochs: 2000
     save_best_after: 50
     save_frequency: 200
     print_stats: True

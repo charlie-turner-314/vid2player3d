@@ -44,9 +44,9 @@ class MotionVAEOption(object):
     n_epochs_decay = 500
     log_freq = 2000
     vis_freq = 1e9
-    save_freq_epoch = 100
+    save_freq_epoch = 50
     lr = 0.0001
-    checkpoint_dir = "../results/motionVAE"
+    checkpoint_dir = "results/motionVAE"
     resume= False
     checkpoint = 'latest'
     use_amp = False
@@ -131,7 +131,5 @@ motion_vae_opt_dict = {
         "handedness": "right",
         "player_name": ["Kyrgios"],
         "dataset_dir": "../tennis_data",
-        "n_epochs": 0,
-        "n_epochs_decay": 250,
     },
 }

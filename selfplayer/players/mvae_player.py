@@ -74,7 +74,7 @@ class MVAEPlayer:
             self._racket = Racket(
                 "tennis", self.device, righthand=self.cfg.get("righthand")
             )
-        else:
+        else: # DUAL
             server = 0 if self.cfg.get("serve_from", "near") != "near" else 1
             self._racket = Racket(
                 "tennis",
@@ -139,7 +139,7 @@ class MVAEPlayer:
         ).to(self.device)
 
         if cfg.get("add_residual_dof"):
-            if self._is_dual:
+            if self._is_dual: # DUAL
                 self._residual_joint_inds = [None, None]
                 for i, rh in enumerate(self.cfg["righthand"]):
                     if rh:
@@ -264,7 +264,7 @@ class MVAEPlayer:
             reset_recovery_env_ids
         ].clone()
 
-        if self._is_dual:
+        if self._is_dual: # DUAL
             serve_from = self.cfg.get("serve_from", "near")
             self._update_mvae_state(
                 self._conditions[env_ids[::2], -1],

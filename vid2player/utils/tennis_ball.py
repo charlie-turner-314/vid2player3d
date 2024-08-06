@@ -54,6 +54,7 @@ def get_sim_params(substeps=2):
     sim_params.dt = 1. / 60.
     sim_params.substeps = substeps
     if args.physics_engine == gymapi.SIM_FLEX:
+        print("Flex")
         sim_params.flex.shape_collision_margin = 0.25
         sim_params.flex.num_outer_iterations = 4
         sim_params.flex.num_inner_iterations = 10
@@ -61,7 +62,7 @@ def get_sim_params(substeps=2):
         sim_params.physx.solver_type = 1
         sim_params.physx.num_position_iterations = 4 if substeps == 2 else 2
         sim_params.physx.num_velocity_iterations = 0
-        sim_params.physx.num_threads = 16
+        sim_params.physx.num_threads = 8 
 
         sim_params.physx.contact_offset = 0.02
         sim_params.physx.rest_offset = 0.0
@@ -94,7 +95,7 @@ def create_sim(sim_params, compute_device_id, graphics_device_id, physics_engine
     plane_params = gymapi.PlaneParams()
     plane_params.static_friction = 1.0
     plane_params.dynamic_friction = 1.0
-    plane_params.restitution = 0.5
+    plane_params.restitution = 1.5
     plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
     gym.add_ground(sim, plane_params)
 
@@ -133,7 +134,7 @@ def simulate(gym, sim, launch_pos, launch_vel, launch_vspin,
     num_env = root_state.shape[0]
     g_tensor = torch.FloatTensor([[0, 0, -1]]).repeat(num_env, 1).to(device)
     launch_ang_vel = launch_vspin.view(-1, 1) * pi * 2 * F.normalize(
-        torch.cross(launch_vel, g_tensor[:num_ball]), dim=1)
+        torch.linalg.cross(launch_vel, g_tensor[:num_ball]), dim=1)
     root_state[:num_ball, 0:3] = launch_pos
     root_state[:num_ball, 7:10] = launch_vel
     root_state[:num_ball, 10:13] = launch_ang_vel
@@ -159,7 +160,7 @@ def simulate(gym, sim, launch_pos, launch_vel, launch_vspin,
             vel = root_state[:, 7:10]
             vel_scalar = vel.norm(dim=1).view(-1, 1)
             vel_norm = vel / vel_scalar
-            vel_tan = torch.cross(vel_norm, g_tensor)
+            vel_tan = torch.linalg.cross(vel_norm, g_tensor)
             vspin = root_state[:, 10:13].norm(dim=1) / (pi * 2)
             vspin[:num_ball] = torch.where(launch_vspin > 0, vspin[:num_ball], vspin[:num_ball] * -1)
             vspin = vspin.view(-1, 1)
@@ -176,7 +177,7 @@ def simulate(gym, sim, launch_pos, launch_vel, launch_vspin,
             )
 
             force_drag = - kf * cd * vel_scalar * vel
-            force_lift = - kf * cl * vel_scalar ** 2 * torch.cross(vel_tan, vel_norm) 
+            force_lift = - kf * cl * vel_scalar ** 2 * torch.linalg.cross(vel_tan, vel_norm) 
             
             if substeps > 2:
                 has_bounce_now = ~has_bounce & (pos[:, 2] <= R * 6)
@@ -265,7 +266,7 @@ class TennisBallGeneratorIsaac():
             ahandle = gym.create_actor(env, asset, pose, None, collision_group, collision_filter)
 
             props = gym.get_actor_rigid_shape_properties(env, ahandle)
-            props[0].restitution = 0.9
+            props[0].restitution = 0.90
             props[0].friction = 0.2
             props[0].compliance = 0.5
             gym.set_actor_rigid_shape_properties(env, ahandle, props)
@@ -280,7 +281,7 @@ class TennisBallGeneratorIsaac():
         self.bounce_min = torch.FloatTensor(cfg.get('bounce_min', [-3, -10, 0]))
         self.bounce_max = torch.FloatTensor(cfg.get('bounce_max', [3, -7, 0]))
         self.vel_range = torch.FloatTensor(cfg.get('vel_range', [28, 30]))
-        self.vspin_range = torch.FloatTensor(cfg.get('vspin_range', [5, 10]))
+        self.vspin_range = torch.FloatTensor(cfg.get('vspin_range', [0, 10]))
         self.theta_range = torch.FloatTensor(cfg.get('theta_range', [5, 15]))
 
         if need_reset:
@@ -323,7 +324,15 @@ class TennisBallGeneratorIsaac():
             (bounce_pos[:, 1] > self.bounce_min[1]) & \
             (bounce_pos[:, 1] < self.bounce_max[1])
         
+        print("Bounced In Court: {}/{}".format(pass_net.sum(), num_samples))
+        max_bounce = 0 
         for i in range(self.num_env):
+            if traj[i, bounce_idx[i]:, 2].max() > max_bounce:
+                max_bounce = traj[i, bounce_idx[i]:, 2].max()
+                print("New Max Bounce: From", traj[i, :bounce_idx[i], 2].max(), "to", traj[i, bounce_idx[i]:, 2].max(),
+                      "Spin: from", launch_vspin[i].cpu().numpy(), 
+                      "Landed at:", bounce_pos[i].cpu().numpy()
+                      )
             valid[i] &= traj[i, bounce_idx[i]:, 2].max() > 1.0
 
         print("Generated {}/{} valid ball trajectories".format(valid.sum(), num_samples))
@@ -459,4 +468,4 @@ class TennisBallGeneratorOffline():
 if __name__ == '__main__':
 
     generate_incoming_trajectory(
-        'data/ball_traj/ball_traj_in.npy', substeps=6, vis=False, append=False)
+        'data/ball_traj/ball_traj_in_new.npy', substeps=6, vis=False, append=False)

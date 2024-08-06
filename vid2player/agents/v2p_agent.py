@@ -10,6 +10,8 @@ import os
 import numpy as np
 from torch import nn
 
+from tensorboardX import SummaryWriter
+
 
 class V2PAgent(common_agent.CommonAgent):
 
@@ -18,6 +20,7 @@ class V2PAgent(common_agent.CommonAgent):
         self.sub_rewards_names = None
         self.log_dict = dict()
         self.task = self.vec_env.env.task
+        self.writer: SummaryWriter = self.writer
 
     def restore(self, cp_name):
         cp_path = os.path.join(self.network_path, f"{self.config['name']}_{cp_name}.pth")
@@ -185,6 +188,16 @@ class V2PAgent(common_agent.CommonAgent):
 
                     if self.has_self_play_config:
                         self.self_play_manager.update(self)
+
+                # add the log_dict to the writer
+                def add_log_dict(log_dict):
+                    for key, value in log_dict.items():
+                        if isinstance(value, dict):
+                            add_log_dict(value)
+                        else:
+                            self.writer.add_scalar(key, value, frame)
+
+                add_log_dict(self.log_dict)
                 
                 # save models
                 latest_model_file = os.path.join(self.network_path, f"{self.config['name']}_latest")
@@ -265,7 +278,6 @@ class V2PAgent(common_agent.CommonAgent):
             if infos['sub_rewards'] is not None:
                 self.step_sub_rewards.update(infos['sub_rewards'].mean(dim=0))
                 self.sub_rewards_names = infos['sub_rewards_names']
-                self.writer.add_scalar('step_sub_rewards', self.step_sub_rewards.avg[0], self.frame)
             # NOTE: only save the last step's info for simplicity
             self.infos = infos
 

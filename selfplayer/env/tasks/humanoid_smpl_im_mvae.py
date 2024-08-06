@@ -803,6 +803,9 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             has_racket_ball_contact_now = ~self._has_racket_ball_contact & \
                 (self._ball_root_states[:, 8] > 0) & \
                 ((self._ball_root_states[:, 8] - self._ball_vel[:, 1]) > 10)
+            # print out number of contacts
+            if has_racket_ball_contact_now.sum() > 0:
+                print(f"Contact detected: {has_racket_ball_contact_now.sum()}")
             self._has_racket_ball_contact_now = has_racket_ball_contact_now
             self._has_racket_ball_contact |= has_racket_ball_contact_now
         

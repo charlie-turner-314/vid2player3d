@@ -149,7 +149,9 @@ class MVAEControllerVis(PhysicsMVAEController):
             if self.cfg['env'].get('select_best'):
                 # compute total distance traveled
                 dist = (self.root_pos_all[:, 1:] - self.root_pos_all[:, :-1]).norm(dim=-1).sum(dim=-1)
-                candidates = (self.bounce_in_rate.avg > 0.95) & (self.fh_ratio.avg < 0.6)
+                # candidates = (self.bounce_in_rate.avg > 0.95) & (self.fh_ratio.avg < 0.6)
+                print(self.bounce_in_rate.max)
+                candidates = (self.bounce_in_rate.avg >= 0)
                 candidate_env_ids = candidates.nonzero(as_tuple=False).flatten()
                 candidate_env_ids = candidate_env_ids[torch.argsort(dist[candidates], descending=True)]
             else:

@@ -443,8 +443,8 @@ class TennisBallGeneratorOffline():
                     indices = torch.clamp(indices, 0, len(self.traj_pool)-1)
         else:
             indices = self.sample_idx[env_ids]
-            self.sample_idx[env_ids] += 1
-            self.sample_idx[env_ids] %= len(self.traj_pool)
+            # self.sample_idx[env_ids] += 1
+            # self.sample_idx[env_ids] %= len(self.traj_pool)
 
         selected_traj = self.traj_pool[indices].clone()
         if need_init_state:
