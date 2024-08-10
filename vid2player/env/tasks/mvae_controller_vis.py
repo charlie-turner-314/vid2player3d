@@ -147,13 +147,29 @@ class MVAEControllerVis(PhysicsMVAEController):
 
         if self.frame_index >= self.cfg['env'].get('num_rec_frames', 300):
             if self.cfg['env'].get('select_best'):
-                # compute total distance traveled
-                dist = (self.root_pos_all[:, 1:] - self.root_pos_all[:, :-1]).norm(dim=-1).sum(dim=-1)
-                # candidates = (self.bounce_in_rate.avg > 0.95) & (self.fh_ratio.avg < 0.6)
-                print(self.bounce_in_rate.max)
-                candidates = (self.bounce_in_rate.avg >= 0)
-                candidate_env_ids = candidates.nonzero(as_tuple=False).flatten()
-                candidate_env_ids = candidate_env_ids[torch.argsort(dist[candidates], descending=True)]
+                # if any of the envs managed to hit the ball, then get the one with the closest bounce
+                print("Selecting Best Envs")
+                if self.hit_rate.avg.max() > 0:
+                    candidate_env_ids = torch.arange(self.num_envs)
+                    candidates = self.hit_rate.avg > 0
+                    print(f"{candidates.sum()} Envs with at least 1 hit")
+                    candidate_env_ids = candidate_env_ids[candidates]
+                    print(f"{self.bounce_in_pos_error.avg.min()} lowest bounce error, max: {self.bounce_in_pos_error.avg.max()}")
+                    candidate_env_ids = candidate_env_ids[torch.argsort(self.bounce_in_pos_error.avg[candidates], descending=True)]
+                else:
+                    # if no env managed to hit the ball, then get the one with the longest distance traveled
+                    dist = (self.root_pos_all[:, 1:] - self.root_pos_all[:, :-1]).norm(dim=-1).sum(dim=-1)
+                    candidate_env_ids = torch.arange(self.num_envs)
+                    candidate_env_ids = candidate_env_ids[torch.argsort(dist, descending=True)]
+
+
+                # # compute total distance traveled
+                # dist = (self.root_pos_all[:, 1:] - self.root_pos_all[:, :-1]).norm(dim=-1).sum(dim=-1)
+                # # candidates = (self.bounce_in_rate.avg > 0.95) & (self.fh_ratio.avg < 0.6)
+                # print(self.bounce_in_rate.max)
+                # candidates = (self.bounce_in_rate.avg >= 0)
+                # candidate_env_ids = candidates.nonzero(as_tuple=False).flatten()
+                # candidate_env_ids = candidate_env_ids[torch.argsort(dist[candidates], descending=True)]
             else:
                 candidate_env_ids = torch.arange(self.num_envs)
 

@@ -149,7 +149,6 @@ class CommonAgent(a2c_continuous.A2CAgent):
             if self.is_rnn:
                 batch_dict = self.play_steps_rnn()
             else:
-                print("IS NOT RNN")
                 batch_dict = self.play_steps() 
         
         play_time_end = time.time()

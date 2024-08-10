@@ -11,6 +11,7 @@ from players.self_player_player import SelfPlayerPlayer
 
 from models.self_player_models import SelfPlayerModel
 from models.self_player_builder import SelfPlayerBuilder
+from models.v2p_network_builder_dual import V2PBuilderDual
 
 
 def create_rlgpu_env(**kwargs):
@@ -122,7 +123,7 @@ def build_alg_runner(algo_observer: RLGPUAlgoObserver) -> Runner:
 
     # AGENT: The agent is responsible for learning the policy.
     runner.algo_factory.register_builder('selfplayer', lambda **kwargs : SelfPlayerAgent(**kwargs))        # training agent
-    # runner.player_factory.register_builder('selfplayer', lambda **kwargs : SelfPlayerPlayer(**kwargs))     # testing agent
+    runner.player_factory.register_builder('selfplayer', lambda **kwargs : SelfPlayerPlayer(**kwargs))     # testing agent
     runner.model_builder.model_factory.register_builder('selfplayer', lambda network, **kwargs : SelfPlayerModel(network))    # network wrapper
     runner.model_builder.network_factory.register_builder('selfplayer', lambda **kwargs : SelfPlayerBuilder())     # actuall network definition class
     # runner.model_builder.network_factory.register_builder('vid2player_dual', lambda **kwargs : V2PBuilderDual())     # actuall network definition class
@@ -130,7 +131,7 @@ def build_alg_runner(algo_observer: RLGPUAlgoObserver) -> Runner:
 
     # TESTING & VISUALISATION
     # runner.model_builder.network_factory.register_builder('vid2player', lambda **kwargs : V2PBuilder())
-    # runner.model_builder.network_factory.register_builder('vid2player_dual', lambda **kwargs : V2PBuilder)
+    runner.model_builder.network_factory.register_builder('selfplayer', lambda **kwargs : V2PBuilderDual())
 
 
     return runner

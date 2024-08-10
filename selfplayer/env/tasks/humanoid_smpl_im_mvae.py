@@ -949,7 +949,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
     
     def optimize_two_hand_backhand(self, joint_rotmat, single=False, righthand=True):
         root_pos = torch.zeros((joint_rotmat.shape[0], 3)).to(self.device)
-        _, _, _, _, _, _, rb_pos, _, _ = self._smpl_to_sim(root_pos, joint_rotmat)
+        _, _, _, _, _, _, rb_pos, _  = self._smpl_to_sim(root_pos, joint_rotmat)
 
         if righthand:
             racket_hand_body_id = 23
@@ -1007,7 +1007,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             joint_rot_ik = joint_rot_ik_origin + rot_delta
             joint_rotmat[:, ik_joint_smpl] = angle_axis_to_rotation_matrix(joint_rot_ik)
 
-            _, _, _, _, _, _, rb_pos, _, _ = self._smpl_to_sim(root_pos, joint_rotmat)
+            _, _, _, _, _, _, rb_pos, _ = self._smpl_to_sim(root_pos, joint_rotmat)
             current_pos = rb_pos[:, free_hand_body_id]
 
             loss_dict['target'] = L1loss(current_pos, target_pos.detach()) * loss_weight['target']

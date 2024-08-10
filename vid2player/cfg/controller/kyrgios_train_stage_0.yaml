@@ -2,7 +2,7 @@ name: PhysicsMVAEController
 test_name: MVAEControllerVis
 env:
   numEnvs: 2560
-  episodeLength: 150
+  episodeLength: 75
   envSpacing: 5
   isFlagrun: False
   enableDebugVis: False
@@ -32,7 +32,7 @@ env:
     spin_scale: 5
 
     reward_weights: { "pos": 1 }
-    reward_scales: { "pos": 10, "phase": 5 }
+    reward_scales: { "pos": 5, "phase": 10 }
     reward_type: reach
     ball_traj_out_x_file: data/ball_traj/ball_traj_out_x.npy
     ball_traj_out_y_file: data/ball_traj/ball_traj_out_y.npy
@@ -125,7 +125,7 @@ params:
     learning_rate: 1e-5
     lr_schedule: constant
     score_to_win: 20000
-    max_epochs: 5000
+    max_epochs: 10000
     save_best_after: 50 
     save_frequency: 500
     print_stats: True
@@ -135,7 +135,7 @@ params:
     e_clip: 0.2
     horizon_length: 64
     minibatch_size: 512
-    mini_epochs: 12
+    mini_epochs: 3
     critic_coef: 5
     clip_value: False
     seq_len: 4

@@ -3,7 +3,7 @@ name: PhysicsMVAEControllerDual
 test_name: MVAEControllerVisDual
 env: 
   numEnvs: 2
-  episodeLength: 300
+  episodeLength: 300 
   envSpacing: 5
   isFlagrun: False
   enableDebugVis: False
@@ -88,7 +88,6 @@ sim:
   none: 0
 
 params:
-  seed: 10
 
   algo:
     name: selfplayer
@@ -158,9 +157,9 @@ params:
     learning_rate: 2e-5
     lr_schedule: constant
     score_to_win: 20000
-    max_epochs: 10000
-    save_best_after: 50
-    save_frequency: 500
+    max_epochs: 20
+    save_best_after: 5
+    save_frequency: 5
     print_stats: True
     entropy_coef: 0.0
     truncate_grads: True
@@ -175,5 +174,8 @@ params:
     bounds_loss_coef: 10
     clip_actions_val: 5.0
     # HERE, ONE MODEL WILL BE FROZEN, TRAINING THE OTHER
-    frozen_model_cp: results/kyrgios_train_stage_1/models/tennis_v1_latest.pth
-    model_cp: results/kyrgios_train_stage_1/models/tennis_v1_latest.pth
+    # frozen_model_cp: results/kyrgios_train_stage_3/models/tennis_v1_latest.pth
+    # model_cp: results/kyrgios_train_stage_3/models/tennis_v1_latest.pth
+    dual_model_cp:
+      - results/kyrgios_train_stage_3/models/tennis_v1_latest.pth
+      - results/kyrgios_train_stage_3/models/tennis_v1_latest.pth
