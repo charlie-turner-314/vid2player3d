@@ -11,6 +11,7 @@ import numpy as np
 from torch import nn
 
 from tensorboardX import SummaryWriter
+import comet_ml
 
 
 class V2PAgent(common_agent.CommonAgent):
@@ -118,6 +119,10 @@ class V2PAgent(common_agent.CommonAgent):
 
         self._init_train()
 
+        # setup comet exp
+        exp = comet_ml.Experiment(project_name="vid2player3d")
+
+
         while True:
             if hasattr(self.task, 'pre_epoch'):
                 self.task.pre_epoch(self.epoch_num)
@@ -198,6 +203,8 @@ class V2PAgent(common_agent.CommonAgent):
                             self.writer.add_scalar(key, value, frame)
 
                 add_log_dict(self.log_dict)
+
+                exp.log_metrics(self.log_dict, step=epoch_num)
                 
                 # save models
                 latest_model_file = os.path.join(self.network_path, f"{self.config['name']}_latest")
@@ -216,9 +223,11 @@ class V2PAgent(common_agent.CommonAgent):
                 if epoch_num >= self.max_epochs:
                     self.save(latest_model_file)
                     print('MAX EPOCHS NUM!')
+                    exp.end()
                     return self.last_mean_rewards, epoch_num
 
                 update_time = 0
+        exp.end()
         return
     
     def _eval_critic(self, obs_dict):

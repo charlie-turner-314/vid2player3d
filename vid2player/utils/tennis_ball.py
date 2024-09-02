@@ -432,6 +432,9 @@ class TennisBallGeneratorOffline():
     def __init__(self, traj_file, sample_random=False, num_envs=None):
         traj_data_all = np.load(traj_file)
         traj_data_all = torch.from_numpy(traj_data_all)
+        # Next line by charlie
+        # NOTE: not in orig:
+        traj_data_all = traj_data_all[:50]
 
         self.launch_pos = traj_data_all[:, 0:3]
         self.launch_vel = traj_data_all[:, 3:6]
