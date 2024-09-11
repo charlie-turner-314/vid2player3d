@@ -62,8 +62,13 @@ class MVAEControllerVis(PhysicsMVAEController):
         super().post_physics_step()
 
     def _compute_reset(self):
+        # reset if player falls down (z axis up)
+        self._terminate_buf |= self._root_pos[:, 2] < 0.5
+        if self._terminate_buf[1721]:
+            print("Env 1721 terminated")
+
         # reset after bounce
-        self._terminate_buf[:] = self.progress_buf > self.cfg['env'].get('episodeLength', 600)
+        self._terminate_buf[:] |= self.progress_buf > self.cfg['env'].get('episodeLength', 600)
         self.reset_buf[:] = self._terminate_buf
         has_contact = self._physics_player.task._has_racket_ball_contact
 
@@ -154,8 +159,9 @@ class MVAEControllerVis(PhysicsMVAEController):
                     candidates = self.hit_rate.avg > 0
                     print(f"{candidates.sum()} Envs with at least 1 hit")
                     candidate_env_ids = candidate_env_ids[candidates]
-                    print(f"{self.bounce_in_pos_error.avg.min()} lowest bounce error, max: {self.bounce_in_pos_error.avg.max()}")
-                    candidate_env_ids = candidate_env_ids[torch.argsort(self.bounce_in_pos_error.avg[candidates], descending=True)]
+                    print(f"Max bounce in rate:", {self.bounce_in_rate.avg.max()})
+                    print(f"With more than 0:", (self.bounce_in_rate.avg > 0).sum())
+                    candidate_env_ids = candidate_env_ids[torch.argsort(self.bounce_in_rate.avg[candidates], descending=True)]
                 else:
                     # if no env managed to hit the ball, then get the one with the longest distance traveled
                     dist = (self.root_pos_all[:, 1:] - self.root_pos_all[:, :-1]).norm(dim=-1).sum(dim=-1)

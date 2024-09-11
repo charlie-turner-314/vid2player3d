@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 4
+names: ['base', 'maximum', 'minimum', 'tip']
+
+roboflow:
+  workspace: anupong-wannakrairot-ud9ty
+  project: gauge-detection-cohbz
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/anupong-wannakrairot-ud9ty/gauge-detection-cohbz/dataset/2

@@ -64,7 +64,7 @@ class Video3DPoseDataset(Dataset):
         def find_neighboring_hits(point, fid):
             # can only predict phase within the hits of the point
             # e.g if hits are at [10, 15, 20], we can only predict phase between 10 and 20 even if there is motion outside that
-            if fid < point[0]["fid"] or fid > point[-1]["fid"]:
+            if fid < point[0]["fid"] or fid >= point[-1]["fid"]:
                 return None, None
             for hid, hit in enumerate(point):
                 if fid == point[hid + 1]["fid"] and hid == 0: 
@@ -73,6 +73,7 @@ class Video3DPoseDataset(Dataset):
                 if fid >= hit["fid"] and fid <= point[hid + 1]["fid"]: 
                     # If frame id is between the current hit and the next hit
                     return hit, point[hid + 1] # Return current hit and next hit
+            return None, None
 
         num_videos = 0
         betas = []
@@ -150,7 +151,17 @@ class Video3DPoseDataset(Dataset):
                 self.selected_arr[seq["base"] : seq["base"] + seq["length"]] = 1
                 betas += [seq["beta"]]
 
-
+        # go through each frame and set it to invalid if it is invalid
+        # invalid if any data in that frame is invalid (na, nan, inf, etc) or the whole frame is 0
+        for i in range(self.joint_pos_arr.shape[0]):
+            if "joint_pos" in opt.pose_feature and (np.isnan(self.joint_pos_arr[i]).any() or np.isinf(self.joint_pos_arr[i]).any() or np.all(self.joint_pos_arr[i] == 0)):
+                self.valid_arr[i] = False
+            if "joint_rot" in opt.pose_feature and (np.isnan(self.joint_rot_arr[i]).any() or np.isinf(self.joint_rot_arr[i]).any() or np.all(self.joint_rot_arr[i] == 0)):
+                self.valid_arr[i] = False
+            if "joint_rotmat" in opt.pose_feature and (np.isnan(self.joint_rotmat_arr[i]).any() or np.isinf(self.joint_rotmat_arr[i]).any() or np.all(self.joint_rotmat_arr[i] == 0)):
+                self.valid_arr[i] = False
+            if "joint_quat" in opt.pose_feature and (np.isnan(self.joint_quat_arr[i]).any() or np.isinf(self.joint_quat_arr[i]).any() or np.all(self.joint_quat_arr[i] == 0)):
+                self.valid_arr[i] = False
         num_valid_frames = np.logical_and(self.valid_arr, self.selected_arr).sum()
         print(
             f"Loaded {len(self.sequences)} motion sequences from {num_videos} videos containing {num_valid_frames}/{np.sum(self.selected_arr)} valid frames"

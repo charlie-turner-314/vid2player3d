@@ -593,6 +593,8 @@ class PhysicsMVAEController:
             )
 
     def _compute_reset(self):
+        terminated = self._root_pos[:, 2] < 0.5
+
         terminated = check_out_of_court(
             self._root_pos, self._court_min, self._court_max
         )
@@ -600,6 +602,7 @@ class PhysicsMVAEController:
         # terminate if player/ball states has NaN
         has_nan = torch.isnan(self.obs_buf).any(dim=1)
         terminated |= has_nan
+
 
         self._terminate_buf[:] = terminated
         self.reset_buf[:] = torch.where(

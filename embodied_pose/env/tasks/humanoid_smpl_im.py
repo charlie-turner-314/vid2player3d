@@ -546,7 +546,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
 
         if self.cfg["env"].get("export_dataset") is not None:
             self._export_frame()
-            self.n_steps = self.__dict__.get("n_steps", 0)
+            self.n_steps = self.__dict__.get("n_steps", 1)
             print("Steps:", self.n_steps)
             self.n_steps += 1
 
@@ -559,7 +559,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
         if not os.path.exists(dataset_dir):
             os.makedirs(dataset_dir)
         for env in range(self.num_envs):
-            # work out if this env is done 
             self._export_frame_env(env, dataset_dir)
 
     def _export_frame_env(self, env, dataset_dir):
@@ -580,7 +579,6 @@ class HumanoidSMPLIM(HumanoidSMPL):
         rel_joint_pos = joint_pos.reshape(1, -1) #[mujoco_2_smpl].reshape(1, -1)
 
         rel_joint_rot = rel_joint_rot[mujoco_2_smpl]
-        # rel_joint_pos[0, 2] = 4
 
         # convert the quaternions to rotation matrices
         joint_rots = sRot.from_rotvec(rel_joint_rot)
@@ -588,27 +586,7 @@ class HumanoidSMPLIM(HumanoidSMPL):
         joint_quat = joint_rots.as_quat().reshape(1, -1)
         joint_rotmats = joint_rots.as_matrix().reshape(1, -1)
 
-        rel_joint_rot = rel_joint_rot.reshape(1, -1) #joint_rots.as_rotvec().reshape(1, -1)
-
-
-
-        # # We need each one relative to its smpl parent
-        # smpl_parents = self.smpl_parents.cpu().numpy()
-        # # Calculate relative rotations to each SMPL parent
-        # relative_rot_mats = np.zeros_like(joint_rots.as_matrix())
-        # for i in range(len(smpl_parents)):
-        #     parent_idx = smpl_parents[i]
-        #     if parent_idx == -1:  # The root joint has no parent
-        #         relative_rot_mats[i] = joint_rots[i].as_matrix()
-        #     else:
-        #         relative_rot_mats[i] = joint_rots[i].as_matrix() @ joint_rots[parent_idx].inv().as_matrix()       
-        #     # print the joint name and the parent joint name
-
-        # joint_rotmats = relative_rot_mats.reshape(1, -1)
-        # rel_joint_rot = sRot.from_matrix(relative_rot_mats).as_rotvec().reshape(1, -1)
-
-        # joint_quat = sRot.from_matrix(relative_rot_mats).as_quat().reshape(1, -1)
-
+        rel_joint_rot = rel_joint_rot.reshape(1, -1) 
 
         # Save the joint positions
         file_path = os.path.join(dataset_dir, "{}_joint_pos.npy".format(seq_name))

@@ -126,7 +126,7 @@ params:
     learning_rate: 1e-5
     lr_schedule: None
     score_to_win: 20000
-    max_epochs: 10000
+    max_epochs: 20000
     save_best_after: 50
     save_frequency: 200
     print_stats: True

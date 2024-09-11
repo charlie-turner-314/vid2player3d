@@ -38,7 +38,7 @@ class MotionVAEOption(object):
     weights = {"recon": 1, "kl": 1, "recon_phase": 10}
     softmax_future = False
 
-    batch_size = 64
+    batch_size = 128
     num_threads = 8
     n_epochs = 500
     n_epochs_decay = 500
@@ -105,7 +105,7 @@ motion_vae_opt_dict = {
         "num_condition_frames": 1,
         "num_future_predictions": 1,
         "nframes_seq": 10,
-        "batch_size": 100,
+        "batch_size": 128,
         "nseqs": 50000,
         "softmax_future": True,
         "curriculum_schedule": [0.1, 0.2],

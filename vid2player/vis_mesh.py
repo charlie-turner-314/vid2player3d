@@ -107,7 +107,7 @@ def visualize_motion(
                 vid_path,
                 init_args=init_args,
                 fps=30,
-                window_size=(1000, 1000),
+                window_size=(1920, 1080),
                 enable_shadow=True,
                 cleanup=True,
             )

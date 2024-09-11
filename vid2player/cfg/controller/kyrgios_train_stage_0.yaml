@@ -2,7 +2,7 @@ name: PhysicsMVAEController
 test_name: MVAEControllerVis
 env:
   numEnvs: 2560
-  episodeLength: 75
+  episodeLength: 150
   envSpacing: 5
   isFlagrun: False
   enableDebugVis: False
