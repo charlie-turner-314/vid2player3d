@@ -1,7 +1,7 @@
 name: PhysicsMVAEController
-test_name: MVAEControllerVis
+te16384st_name: MVAEControllerVis
 env: 
-  numEnvs: 2560
+  numEnvs: 15360
   episodeLength: 300
   envSpacing: 5
   isFlagrun: False
@@ -20,7 +20,7 @@ env:
     substeps: 6
     num_position_iterations: 2
     residual_force_scale: 31.85
-    plane_restitution: 0.9
+    plane_restitution: 0.5
 
   vid2player:
     mvae_ver: kyrgios
@@ -123,7 +123,7 @@ params:
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
-    learning_rate: 5e-4
+    learning_rate: 2e-5
     lr_schedule: constant
     score_to_win: 20000
     max_epochs: 10000
@@ -135,7 +135,7 @@ params:
     grad_norm: 50.0
     e_clip: 0.2
     horizon_length: 32
-    minibatch_size: 256
+    minibatch_size: 12288
     mini_epochs: 3
     critic_coef: 5
     clip_value: False
