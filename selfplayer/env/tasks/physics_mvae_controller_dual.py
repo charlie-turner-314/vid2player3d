@@ -29,6 +29,7 @@ class PhysicsMVAEControllerDual(PhysicsMVAEController):
         self._reset_envs(env_ids)
     
     def _reset_envs(self, env_ids):
+        print("RESET ENVS")
         if len(env_ids) > 0:
             assert len(env_ids) % 2 == 0, len(env_ids)
             if self.cfg_v2p.get('serve_from', 'near') == 'near':
@@ -69,6 +70,7 @@ class PhysicsMVAEControllerDual(PhysicsMVAEController):
         self._has_init = True
 
     def _reset_reaction_tasks(self, env_ids, humanoid_env_ids=None):
+        print("RESET REACTION TASKS")
         if self.cfg_v2p.get('use_history_ball_obs'):
             self._ball_obs[env_ids] = self._ball_pos[env_ids].view(-1, 1, 3).repeat(1, self._obs_ball_traj_length, 1)
         self._tar_time[env_ids] = 0
@@ -92,11 +94,13 @@ class PhysicsMVAEControllerDual(PhysicsMVAEController):
             self._est_max_height[env_ids] = 0
         
     def _reset_recovery_tasks(self, env_ids):
+        print("RESET RECOVERY TASKS")
         self._tar_action[env_ids] = 0
         self._physics_player.task._has_bounce[env_ids] = 0
         self._physics_player.task._bounce_pos[env_ids] = 0
     
     def _compute_reset(self):
+        print("COMPUTE RESET")
         has_contact = self._physics_player.task._has_racket_ball_contact
         has_bounce = self._physics_player.task._has_bounce
         in_recovery = self._tar_action == 0

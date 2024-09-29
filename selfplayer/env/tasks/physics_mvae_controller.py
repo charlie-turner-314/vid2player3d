@@ -279,7 +279,7 @@ class PhysicsMVAEController:
         self._physics_player.task._controller = self
 
         self._num_actor_obs = 3 + 3 + 24 * 3 + 24 * 6 + 3
-        # NOTE: Don't know what this 32 is
+        # NOTE: Don't know what this 32 is -> its the embedding size
         self._num_mvae_action = self._num_actions = 32
         self._num_res_dof_action = 0
         if self.cfg_v2p.get("add_residual_dof"):
@@ -406,6 +406,7 @@ class PhysicsMVAEController:
         self._physics_player.task._bounce_pos[env_ids] = 0
 
     def pre_physics_step(self, actions):
+        print("PRE PHYSICS STEP")
         self._actions = actions.clone()
         self._mvae_actions = actions[
             :, : self._num_mvae_action

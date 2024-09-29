@@ -64,7 +64,7 @@ class Video3DPoseDataset(Dataset):
         def find_neighboring_hits(point, fid):
             # can only predict phase within the hits of the point
             # e.g if hits are at [10, 15, 20], we can only predict phase between 10 and 20 even if there is motion outside that
-            if fid < point[0]["fid"] or fid >= point[-1]["fid"]:
+            if len(point) < 2 or fid < point[0]["fid"] or fid >= point[-1]["fid"]:
                 return None, None
             for hid, hit in enumerate(point):
                 if fid == point[hid + 1]["fid"] and hid == 0: 
@@ -124,8 +124,8 @@ class Video3DPoseDataset(Dataset):
                         continue
                     point = video["points_annotation"][seq["point_idx"]]["keyframes"]
                     for idx in range(seq["length"]): # for every frame in the sequence
-                        fid = idx + seq["base"]        # Frame ID (within point)
-                        arr_idx = idx + seq["base"]     # Base is the index of the first frame of the sequence in the whole dataset
+                        fid = idx + seq["base"]         # Frame ID (within point)
+                        arr_idx = idx + seq["start"]     # Base is the index of the first frame of the sequence in the whole dataset
                         prev_hit, next_hit = find_neighboring_hits(point, fid)
                         if prev_hit is None or next_hit is None:
                             # set this frame to invalid
@@ -141,14 +141,14 @@ class Video3DPoseDataset(Dataset):
                         )
                         self.phase_rad_arr[arr_idx] = phase * np.pi
                     seq["has_phase"] = True
-                    # plot the phase rad array and save as a plot phase.png
-                    from matplotlib import pyplot as plt
-                    plt.plot(self.phase_rad_arr)
-                    plt.savefig("phase.png")
-                    plt.close()
+                    # save the phase array to a file
+                    # np.save(
+                    #     "phase.npy", self.phase_arr
+                    # )
+
 
                 self.sequences += [seq]
-                self.selected_arr[seq["base"] : seq["base"] + seq["length"]] = 1
+                self.selected_arr[seq["start"] : seq["start"] + seq["length"]] = 1
                 betas += [seq["beta"]]
 
         # go through each frame and set it to invalid if it is invalid
@@ -185,7 +185,7 @@ class Video3DPoseDataset(Dataset):
             total_seqs = int(len(self.sequences) * self.opt.database_ratio)
             self.sequences = self.sequences[:total_seqs]
         for seq in self.sequences:
-            for x in range(seq["base"], seq["base"] + seq["length"] - nframes_seq - 1):
+            for x in range(seq["start"], seq["start"] + seq["length"] - nframes_seq - 1):
                 if self.valid_arr[x : x + nframes_seq + 1].sum() == nframes_seq + 1:
                     self.rollouts += [x]
 
@@ -307,10 +307,13 @@ class Video3DPoseDataset(Dataset):
 
         if self.std is not None:
             feature = (feature - self.avg) / self.std
-
+        joint_rot = self.joint_rot_arr[start+1 : end]
+        trans = self.joint_pos_arr[start+1: end][0, :]
         data_dict = {
             "feature": feature,
             "start": start,
+            "joint_rot": joint_rot,
+            "trans": trans
         }
         if opt.predict_phase:
             data_dict["phase"] = self.phase_arr[start + 1 : end]

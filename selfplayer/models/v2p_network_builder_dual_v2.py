@@ -13,6 +13,10 @@ class V2PBuilderDualV2(network_builder.A2CBuilder):
 
     class Network(nn.Module):
         def __init__(self, params, **kwargs):
+            print("WHAAAAT")
+            print(params)
+            print(**kwargs)
+            print("WHAAAAT")
             super().__init__()
             self.network1 = V2PBuilder.Network(params, **kwargs)
             self.network2 = V2PBuilder.Network(params, **kwargs)

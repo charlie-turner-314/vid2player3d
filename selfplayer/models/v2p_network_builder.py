@@ -16,6 +16,9 @@ class V2PBuilder(network_builder.A2CBuilder):
 
     class Network(network_builder.A2CBuilder.Network):
         def __init__(self, params, **kwargs):
+            print('V2PBuilder.Network *************************')
+            print(params)
+            print('V2PBuilder.Network *************************')
             super().__init__(params, **kwargs)
 
             self.use_running_obs = params.get('use_running_obs', False)

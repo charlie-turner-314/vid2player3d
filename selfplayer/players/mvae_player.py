@@ -294,9 +294,11 @@ class MVAEPlayer:
         condition_flat = self._conditions.flatten(start_dim=1, end_dim=2)
         with torch.no_grad():
             if not self._is_dual:
+                print("SINGLE MODE STEP")
                 feature, phase = self._mvae.forward(latents, condition_flat)
                 self._update_mvae_state(feature, phase, residual)
             else:
+                print("DUAL MODE STEP")
                 feature1, phase1 = self._mvae1.forward(
                     latents[::2], condition_flat[::2]
                 )

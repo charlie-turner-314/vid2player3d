@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
+import json
 
 from smpl_visualizer.vis_sport import SportVisualizer
 from smpl_visualizer.smpl import SMPL, SMPL_MODEL_DIR
@@ -17,7 +18,7 @@ from utils.racket import infer_racket_from_smpl
 
 
 def visualize_motion(
-    num_test, nframes, joint_rot_all, joint_pos_all, betas, trans_all, filename="motionvis.mp4", interactive=False
+    num_test, nframes, joint_rot_all, joint_pos_all, betas, trans_all, events, filename="motionvis.mp4", interactive=False,
 ):
     """
     Visualize motion using the provided body rotations, positions, and betas.
@@ -42,13 +43,14 @@ def visualize_motion(
         result_sub_dir = os.path.join(result_dir, "{:03}".format(tid + 1))
         os.makedirs(result_sub_dir, exist_ok=True)
         print("Running test", tid + 1)
-        print(joint_rot_all.shape)
 
-        # joint_pos_all = joint_pos_all.reshape(-1, nframes, 24, 3)
+        joint_pos_all = joint_pos_all.reshape(-1, nframes, 24, 3)
         joint_rot_all = joint_rot_all.reshape(-1, nframes, 24, 3)
         trans_all = trans_all.reshape(-1, nframes, 3)
 
-        joint_rot_all[..., -1, :] = torch.FloatTensor([0, 0, np.pi / 2])
+        # joint_rot_all[..., -1, :] = torch.FloatTensor([0, 0, np.pi / 2])
+
+        betas=torch.zeros((nframes, 10)).float()
 
         if True:
             smpl_motion = smpl(
@@ -111,6 +113,41 @@ def visualize_motion(
                 enable_shadow=True,
                 cleanup=True,
             )
+        # get the video, add a flash at each event
+        print("Adding events")
+        event_frames = [e["frame"] for e in events["events"] if e["label"] == "near_court_swing"]
+        # Open the original video
+        cap = cv2.VideoCapture(vid_path)
+        WIDTH, HEIGHT = (
+            int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+        )
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        out = cv2.VideoWriter('tmp.mp4', fourcc, 30.0, (WIDTH, HEIGHT))
+
+        frame_idx = 0
+        event_set = set(event_frames)
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if frame_idx in event_set:
+                print("event")
+                # Flash the screen green
+                frame[:] = [0, 255, 0]
+
+            assert frame.shape[1] == WIDTH and frame.shape[0] == HEIGHT, "Frame dimensions do not match the specified video dimensions."
+            out.write(frame)
+            frame_idx += 1
+
+        cap.release()
+        out.release()
+
+        # Overwrite the original video with the new video
+        os.replace('tmp.mp4', vid_path.replace(".mp4", "_events.mp4"))
+
 
 
 # Example usage
@@ -144,9 +181,33 @@ def visualize_motion(
 #     )
 #     print("Done.")
 import joblib
+import numpy as np
+from motion_vae import dataset
+from motion_vae.config import *
 
-motion_dict = joblib.load("/home/charlie/Documents/Kyrgios_Medvedev_2022/processed/processed_data.pkl")
-for key in motion_dict:
+opt = MotionVAEOption()
+opt.load("kyrgios")
+data = dataset.Video3DPoseDataset(opt)
+item = data[0]
+joint_rot = item["joint_rot"]
+trans = item["trans"]
+visualize_motion(
+    1, len(joint_rot), joint_rot, None, None, trans, None, "mvae"
+)
+print(item)
+exit()
+
+
+
+# pick 20 random motions
+
+
+for key in random_keys:
+    vid_name = key.replace("file_res_", "")
+    # get the events
+    event_file = f"/home/charlie/Documents/aux/sequence_hits/{vid_name}.json"
+    with open(event_file, "r") as f:
+        events = json.load(f)
     print(motion_dict[key].keys())
     trans_all = motion_dict[key]["trans"]
     joint_rot_all = motion_dict[key]["pose_aa"]
@@ -160,5 +221,7 @@ for key in motion_dict:
         torch.from_numpy(joint_pos_all),
         torch.from_numpy(betas).float(),
         torch.from_numpy(trans_all).float(),
+        events,
         filename=f"video/{key}.mp4",
+
     )

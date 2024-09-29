@@ -46,7 +46,7 @@ class MotionVAEOption(object):
     vis_freq = 1e9
     save_freq_epoch = 50
     lr = 0.0001
-    checkpoint_dir = "results/motionVAE"
+    checkpoint_dir = "/home/charlie/Documents/ATPIL/Training/vid2player3d/results/motionVAE"
     resume= False
     checkpoint = 'latest'
     use_amp = False
