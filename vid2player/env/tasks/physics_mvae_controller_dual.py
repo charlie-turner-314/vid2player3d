@@ -26,6 +26,7 @@ class PhysicsMVAEControllerDual(PhysicsMVAEController):
         self._reset_envs(env_ids)
     
     def _reset_envs(self, env_ids):
+        print("RESETTING: ", env_ids)
         if len(env_ids) > 0:
             assert len(env_ids) % 2 == 0, len(env_ids)
             if self.cfg_v2p.get('serve_from', 'near') == 'near':
@@ -39,8 +40,12 @@ class PhysicsMVAEControllerDual(PhysicsMVAEController):
         else:
             reset_actor_reaction_env_ids = reset_actor_recovery_env_ids = torch.LongTensor([])
         
+        print("Resetting actor reaction envs:", reset_actor_reaction_env_ids)
+        print("Resetting actor recovery envs:", reset_actor_recovery_env_ids)
         reset_reaction_env_ids = self._reset_reaction_buf.nonzero(as_tuple=False).flatten()
         reset_recovery_env_ids = self._reset_recovery_buf.nonzero(as_tuple=False).flatten()
+        print("Resetting reaction envs:", reset_reaction_env_ids)
+        print("Resetting recovery envs:", reset_recovery_env_ids)
         reset_actor_env_ids = env_ids
 
         if len(env_ids) > 0:
@@ -48,6 +53,7 @@ class PhysicsMVAEControllerDual(PhysicsMVAEController):
             self._reset_env_tensors(reset_actor_env_ids)
         
         if len(reset_reaction_env_ids) > 0:
+            print("RESET_REACTION_ENV_IDS: ", reset_reaction_env_ids, reset_actor_reaction_env_ids)
             new_traj = self._physics_player.task.reset(
                 reset_actor_reaction_env_ids, reset_reaction_env_ids)
             self._ball_traj[reset_reaction_env_ids, :new_traj.shape[1]] = new_traj.to(self.device)

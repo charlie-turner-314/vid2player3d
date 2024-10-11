@@ -293,6 +293,7 @@ def get_args(benchmark=False):
         {"name": "--start_eg_id", "type": int, "default": 1},
         {"name": "--num_eg", "type": int, "default": 1},
         {"name": "--camera", "type": str, "default": 'front'},
+        {"name": "--use_comet", "action": "store_true", "default": False},
     ]
 
     if benchmark:

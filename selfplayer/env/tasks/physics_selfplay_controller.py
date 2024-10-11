@@ -1,12 +1,6 @@
 """
+physics_selfplay_controller.py
 Environment for Tennis self-play.
-2 Agents:
-    1. Training Agent (focus)
-    2. Opponent Agent (frozen)
-
-The training agent is trained to beat the opponent agent.
-Both start with the same policy from vid2player3d. Focus agent has the advantage of knowing the opponents position.
-
 """
 from players.mvae_player import MVAEPlayer
 from env.utils.player_builder import PlayerBuilder
@@ -16,6 +10,7 @@ from utils.torch_transform import quat_to_rot6d
 from utils import torch_utils
 from utils.common import get_opponent_env_ids
 
+from typing import Dict, Tuple
 import torch
 import math
 import pdb
@@ -25,7 +20,6 @@ class PhysicsSelfPlayController:
     def __init__(
         self, cfg, sim_params, physics_engine, device_type, device_id, headless
     ):
-        print("PHYSICS SELFPLAY CONTROLLER")
         self.cfg = cfg
         self.cfg_v2p = self.cfg["env"]["vid2player"]
         self.cfg["device_type"] = device_type
@@ -69,6 +63,14 @@ class PhysicsSelfPlayController:
         self._sub_rewards = None
         self._sub_rewards_names = None
 
+        self._opponent_pos = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self._opponent_vel = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self._opponent_pos_history = torch.zeros(
+            (self.num_envs, self._obs_opponent_history_length, 2),
+            device=self.device,
+            dtype=torch.float32,
+        )
+
         self._has_init = False
         self._racket_pos = torch.zeros(
             (self.num_envs, 3), device=self.device, dtype=torch.float32
@@ -77,7 +79,8 @@ class PhysicsSelfPlayController:
             (self.num_envs, 3), device=self.device, dtype=torch.float32
         )
         self._reward_scales = self.cfg_v2p.get("reward_scales", {}).copy()
-        # racket body has already been fliped to be the last body
+
+        # racket body has already been fliped to be the last body 
         self._num_humanoid_bodies = 24
         self._racket_body_id = 24
         self._head_body_id = 13
@@ -94,6 +97,16 @@ class PhysicsSelfPlayController:
         self._bounce_in = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.bool
         )
+
+        self._ball_out_estimator = TennisBallOutEstimator(
+            self.cfg_v2p.get(
+                "ball_traj_out_x_file", "vid2player/data/ball_traj_out_x_v0.npy"
+            ),
+            self.cfg_v2p.get(
+                "ball_traj_out_y_file", "vid2player/data/ball_traj_out_y_v0.npy"
+            ),
+        )
+
         # estimate bounce for stats
         self._est_bounce_pos = torch.zeros(
             (self.num_envs, 3), device=self.device, dtype=torch.float32
@@ -107,15 +120,8 @@ class PhysicsSelfPlayController:
         self._est_max_height = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.float32
         )
-        # if not self.cfg_v2p.get("dual_mode"):
-        #     self._ball_out_estimator = TennisBallOutEstimator(
-        #         self.cfg_v2p.get(
-        #             "ball_traj_out_x_file", "vid2player/data/ball_traj_out_x_v0.npy"
-        #         ),
-        #         self.cfg_v2p.get(
-        #             "ball_traj_out_y_file", "vid2player/data/ball_traj_out_y_v0.npy"
-        #         ),
-        #     )
+
+        # court dims
         if self.cfg_v2p.get("court_min"):
             self._court_min = torch.FloatTensor(self.cfg_v2p["court_min"]).to(
                 self.device
@@ -124,7 +130,6 @@ class PhysicsSelfPlayController:
                 self.device
             )
             self._court_range = self._court_max - self._court_min
-            print("Court range:", self._court_min, self._court_max)
 
         # target
         self._tar_time = torch.zeros(
@@ -137,22 +142,13 @@ class PhysicsSelfPlayController:
             self.num_envs, device=self.device, dtype=torch.int64
         )  # 1 swing 0 recovery
 
-        # NOTE: For selfplay need to think about whether a target bounce position is nessecary. Could use a network to predict target bounce based on opponent position
-        self._target_bounce_pos = torch.zeros(
-            (self.num_envs, 3), device=self.device, dtype=torch.float32
-        ) # coordinates of target point
-
-        self._target_bounce_pos[:] = torch.FloatTensor([0, 10, 0]) 
-
-
-        # NOTE: For selfplay this may not be the case
-        # all envs start with reaction task
-        self._reset_reaction_buf = torch.ones(
+        self._reset_reaction_buf = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.bool
         )
         self._reset_recovery_buf = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.bool
         )
+
         self._num_reset_reaction = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.int64
         )
@@ -163,7 +159,6 @@ class PhysicsSelfPlayController:
             self.num_envs, device=self.device, dtype=torch.float32
         )
 
-        # NOTE: For selfplay this is still all relevant
         self._sub_rewards = [None] * self.num_envs
         self._sub_rewards_names = None
         self._mvae_actions = None
@@ -187,6 +182,8 @@ class PhysicsSelfPlayController:
 
     def create_sim(self):
         # Set the betas
+        self.cfg_v2p["smpl_beta"] = [self.cfg_v2p.get("smpl_beta", [0.0] * 10)]
+
         self.betas = (
             torch.FloatTensor(self.cfg_v2p["smpl_beta"])
             .repeat(self.num_envs, 1)
@@ -194,7 +191,6 @@ class PhysicsSelfPlayController:
         )
 
         # MOTION PLAYERS
-        print("CREATING MVAE PLAYERS")
         self._mvae_player = MVAEPlayer(
             self.cfg_v2p,
             num_envs=self.num_envs,
@@ -204,19 +200,21 @@ class PhysicsSelfPlayController:
         )
         self._smpl = self._mvae_player._smpl
 
-        print("CREATED MVAE PLAYER")
 
         # EMBODIED POSE PLAYERS
-        self._physics_player = None
         self._physics_player = PlayerBuilder(self, self.cfg).build_player()
         self._physics_player.task._smpl = self._smpl
         self._physics_player.task._mvae_player = self._mvae_player
         self._physics_player.task._controller = self
 
         # Size of the Agent's Observations
+        # pos x3, vel x3, body_pos 24x3, body_rot 24x6, racket_normal
+        # Things that the agent can observe about itself
         self._num_actor_obs = 3 + 3 + 24 * 3 + 24 * 6 + 3
-        # NOTE: Don't know what this 32 is (latent space size methinks)
-        self._num_mvae_action = self._num_actions = 32
+
+        # NOTE: (latent space size of the mvae)
+        self._num_mvae_action = self._num_actions = 32 # Number of outputs for the controller network -> number of inputs for the MVAE
+
         self._num_res_dof_action = 0
         if self.cfg_v2p.get("add_residual_dof"):
             self._num_res_dof_action += 3
@@ -224,7 +222,8 @@ class PhysicsSelfPlayController:
         if self.cfg_v2p.get("add_residual_root"):
             self._num_actions += 3
 
-        self.cfg["env"]["numActions"] = self.get_action_size()
+        self.cfg["env"]["numActions"] = self.get_action_size() 
+
         # Num Observations = Actor Observations + Task Observations
         self.cfg["env"]["numObservations"] = (
             self.get_actor_obs_size() 
@@ -235,8 +234,19 @@ class PhysicsSelfPlayController:
     def get_task_obs_size(self):
         self._num_task_obs = 3 * self.cfg_v2p.get("obs_ball_traj_length", 100)
 
-        if self.cfg_v2p.get("use_random_ball_target", False):
-            self._num_task_obs += 2
+        # Remove the ball target from the observations
+        # if self.cfg_v2p.get("use_random_ball_target", False):
+        #     self._num_task_obs += 2  # Remove this line
+
+        # Add opponent's current and past positions (assuming past 10 positions)
+        self._obs_opponent_history_length = 10  # You can adjust this value
+        self._num_task_obs += self._obs_opponent_history_length * 2  # x and y positions
+
+        # Optionally, add opponent's velocity
+        self._include_opponent_velocity = True  # Set to False if not needed
+        if self._include_opponent_velocity:
+            self._num_task_obs += 2  # x and y velocities
+
         return self._num_task_obs
 
     def reset(self, env_ids=None):
@@ -248,21 +258,27 @@ class PhysicsSelfPlayController:
 
     def _reset_envs(self, env_ids):
         if len(env_ids) > 0:
+            # if you provide env ids, you have to provide both agents on the same court
             assert len(env_ids) % 2 == 0, len(env_ids)
             if self.cfg_v2p.get('serve_from', 'near') == 'near':
-                reset_actor_reaction_env_ids = env_ids[::2]
+                # If we serve from near, set reaction envs to the first and every other env
+                reset_actor_reaction_env_ids = env_ids[::2] 
             else:
+                # Otherwise, reaction envs is the second and every other env
                 reset_actor_reaction_env_ids = env_ids[1::2]
+ 
+            reset_actor_recovery_env_ids = get_opponent_env_ids(reset_actor_reaction_env_ids) # Recovery envs are just the opponents of the reaction envs
 
-            reset_actor_recovery_env_ids = get_opponent_env_ids(reset_actor_reaction_env_ids)
-            self._reset_reaction_buf[reset_actor_reaction_env_ids] = 1
-            self._reset_recovery_buf[reset_actor_recovery_env_ids] = 1
+            # Set the boolean flags for resetting the reaction and recovery envs
+            self._reset_reaction_buf[reset_actor_reaction_env_ids] = 1 # Set the reaction envs to reset
+            self._reset_recovery_buf[reset_actor_recovery_env_ids] = 1 # Set the recovery envs to reset
         else:
+            # If no env ids are provided, set to empty tensors
             reset_actor_reaction_env_ids = reset_actor_recovery_env_ids = torch.LongTensor([])
         
-        reset_reaction_env_ids = self._reset_reaction_buf.nonzero(as_tuple=False).flatten()
-        reset_recovery_env_ids = self._reset_recovery_buf.nonzero(as_tuple=False).flatten()
-        reset_actor_env_ids = env_ids
+        reset_reaction_env_ids = self._reset_reaction_buf.nonzero(as_tuple=False).flatten() # Get the reaction envs that need to be reset
+        reset_recovery_env_ids = self._reset_recovery_buf.nonzero(as_tuple=False).flatten() # Get the recovery envs that need to be reset
+        reset_actor_env_ids = env_ids # Get all the env ids that need to be reset
 
         if len(env_ids) > 0:
             self._mvae_player.reset_dual(reset_actor_reaction_env_ids, reset_actor_recovery_env_ids)
@@ -297,26 +313,11 @@ class PhysicsSelfPlayController:
 
     def _reset_reaction_tasks(self, env_ids, humanoid_env_ids=None):
         if self.cfg_v2p.get('use_history_ball_obs'):
-            self._ball_obs[env_ids] = self._ball_pos[env_ids].view(-1, 1, 3).repeat(1, self._obs_ball_traj_length, 1)
-        self._tar_time[env_ids] = 0
-        self._tar_action[env_ids] = 1
+            self._ball_obs[env_ids]     = self._ball_pos[env_ids].view(-1, 1, 3).repeat(1, self._obs_ball_traj_length, 1)
+        self._tar_time[env_ids]         = 0
+        self._tar_action[env_ids]   = 1
         self._num_reset_reaction[env_ids] += 1
         self._bounce_in[env_ids] = 0
-    
-        if self.cfg_v2p.get('use_random_ball_target'):
-            rand_seed = torch.rand((len(env_ids)))
-            bounce_left = rand_seed < 0.33
-            bounce_right = rand_seed > 0.67
-            bounce_middle = ~bounce_left & ~bounce_right
-            self._target_bounce_pos[env_ids[bounce_left]] = torch.FloatTensor([-3, 10, 0]).to(self.device)
-            self._target_bounce_pos[env_ids[bounce_middle]] = torch.FloatTensor([0, 10, 0]).to(self.device)
-            self._target_bounce_pos[env_ids[bounce_right]] = torch.FloatTensor([3, 10, 0]).to(self.device)
-
-        if self.cfg_v2p['reward_type'] == 'return_w_estimate':
-            self._est_bounce_pos[env_ids, :] = 0
-            self._est_bounce_time[env_ids] = 0
-            self._est_bounce_in[env_ids] = 0
-            self._est_max_height[env_ids] = 0
 
     def _reset_recovery_tasks(self, env_ids):
         self._tar_action[env_ids] = 0
@@ -390,26 +391,31 @@ class PhysicsSelfPlayController:
 
         # estimate bounce position
         has_contact_now = self._physics_player.task._has_racket_ball_contact_now
-        if not self.cfg_v2p.get("dual_mode") and has_contact_now.sum() > 0:
-            has_valid_contact, bounce_pos, bounce_time, max_height = (
-                self._ball_out_estimator.estimate(
-                    self._physics_player.task._ball_root_states[has_contact_now]
+        if self.cfg_v2p.get("dual_mode") and has_contact_now.sum() > 0:
+            env_ids_contact = has_contact_now.nonzero(as_tuple=False).flatten()
+            if env_ids_contact.numel() > 0:
+                # Get the ball root states for the environments where contact occurred
+                ball_states = self._physics_player.task._ball_root_states[env_ids_contact]
+                # Estimate the bounce positions
+                has_valid_contact, bounce_pos, bounce_time, max_height = (
+                    self._ball_out_estimator.estimate(ball_states)
                 )
-            )
-            if has_valid_contact.sum() > 0:
-                env_ids = has_contact_now.nonzero(as_tuple=False).flatten()[
-                    has_valid_contact
-                ]
-                self._est_bounce_pos[env_ids, :2] = bounce_pos
-                self._est_bounce_time[env_ids] = bounce_time
-                self._est_max_height[env_ids] = max_height
+                if has_valid_contact.sum() > 0:
+                    # Get the valid env_ids
+                    valid_env_ids = env_ids_contact[has_valid_contact]
+                    # Get the opponent env_ids
+                    opponent_env_ids = get_opponent_env_ids(valid_env_ids)
+                    # Update the estimated bounce positions for the opponent
+                    self._est_bounce_pos[opponent_env_ids, :2] = bounce_pos
+                    self._est_bounce_time[opponent_env_ids] = bounce_time
+                    self._est_max_height[opponent_env_ids] = max_height
 
-                self._est_bounce_in[env_ids] = (
-                    (self._est_bounce_pos[env_ids, 0] > court_min[0])
-                    & (self._est_bounce_pos[env_ids, 0] < court_max[0])
-                    & (self._est_bounce_pos[env_ids, 1] > court_min[1])
-                    & (self._est_bounce_pos[env_ids, 1] < court_max[1])
-                )
+                    self._est_bounce_in[opponent_env_ids] = (
+                        (self._est_bounce_pos[opponent_env_ids, 0] > court_min[0])
+                        & (self._est_bounce_pos[opponent_env_ids, 0] < court_max[0])
+                        & (self._est_bounce_pos[opponent_env_ids, 1] > court_min[1])
+                        & (self._est_bounce_pos[opponent_env_ids, 1] < court_max[1])
+                    )
 
         self._phase_pred = self._mvae_player._phase_pred
 
@@ -417,10 +423,11 @@ class PhysicsSelfPlayController:
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
 
+
         actor_obs = self._compute_actor_obs(env_ids)
         if torch.isnan(actor_obs).any():
             print("Found NAN in actor obersavations")
-            pdb.set_trace(())
+            pdb.set_trace()
 
         task_obs = self._compute_task_obs(env_ids)
         if torch.isnan(task_obs).any():
@@ -452,29 +459,62 @@ class PhysicsSelfPlayController:
         return actor_obs
 
     def _compute_task_obs(self, env_ids):
+        # Existing ball observations
         self._ball_obs[env_ids] = self._ball_obs[env_ids].roll(-1, dims=1)
-        self._ball_obs[env_ids, -1] = self._ball_pos[
-            env_ids
-        ].clone()  # Last is the latest
+        self._ball_obs[env_ids, -1] = self._ball_pos[env_ids].clone()
 
         if self.cfg_v2p.get("use_history_ball_obs", False):
             ball_obs = self._ball_obs[env_ids]
         else:
             ball_obs = self._ball_traj[env_ids, : self._obs_ball_traj_length]
 
-        # relative to current racket
-        task_obs = ball_obs - self._physics_player.task._rigid_body_pos[
-            env_ids, self._racket_body_id
-        ].unsqueeze(-2)
+        # Relative ball position to current racket
+        task_obs = ball_obs - self._physics_player.task._rigid_body_pos[env_ids, self._racket_body_id].unsqueeze(-2)
 
-        if self.cfg_v2p.get("use_random_ball_target", False):
-            target = (
-                self._target_bounce_pos[env_ids, :2]
-                - self._physics_player.task._root_pos[env_ids, :2]
-            )
-            task_obs = torch.cat([task_obs.view(len(env_ids), -1), target], dim=-1)
+        # Remove ball target from observations
+        # if self.cfg_v2p.get("use_random_ball_target", False):
+        #     target = self._target_bounce_pos[env_ids, :2] - self._physics_player.task._root_pos[env_ids, :2]
+        #     task_obs = torch.cat([task_obs.view(len(env_ids), -1), target], dim=-1)
 
-        return task_obs.view(len(env_ids), -1)
+        # Include opponent's observations
+        self._compute_opponent_obs(env_ids)
+
+        # Flatten ball observations
+        task_obs = task_obs.view(len(env_ids), -1)
+
+        # Add opponent's position history
+        opponent_pos_history = self._opponent_pos_history[env_ids].view(len(env_ids), -1)
+
+        # Optionally, include opponent's velocity
+        if self._include_opponent_velocity:
+            opponent_vel = self._opponent_vel[env_ids]
+            task_obs = torch.cat([task_obs, opponent_pos_history, opponent_vel], dim=-1)
+        else:
+            task_obs = torch.cat([task_obs, opponent_pos_history], dim=-1)
+
+        return task_obs
+    
+
+    def _compute_opponent_obs(self, env_ids):
+        """
+        Update observations of the opponent agent.
+        - Opponent position history (x and y)
+        - Opponent velocity (x and y)
+        """
+        # Assuming opponent's environment IDs are interleaved with the agent's IDs
+        opponent_env_ids = get_opponent_env_ids(env_ids)
+
+        # Get opponent's current position (x and y)
+        opponent_root_pos = self._physics_player.task._root_pos[opponent_env_ids, :2]
+        opponent_root_vel = self._physics_player.task._root_vel[opponent_env_ids, :2]
+
+        # Update opponent position history
+        self._opponent_pos_history[env_ids] = self._opponent_pos_history[env_ids].roll(-1, dims=1)
+        self._opponent_pos_history[env_ids, -1] = opponent_root_pos
+
+        # Update current opponent position and velocity
+        self._opponent_pos[env_ids] = opponent_root_pos
+        self._opponent_vel[env_ids] = opponent_root_vel
 
     def physics_step(self):
         self._physics_player.run_one_step()
@@ -482,53 +522,56 @@ class PhysicsSelfPlayController:
         self._ball_traj = self._ball_traj.roll(-1, dims=1)
         self._ball_traj[:, -1] = 0
 
+
+
     def _compute_reward(self, actions):
-        reward_type = self.cfg_v2p.get("reward_type", "return")
         reward_weights = self.cfg_v2p.get("reward_weights", {})
 
-        if reward_type == "reach":
-            self.rew_buf[:], self._sub_rewards, self._sub_rewards_names = (
-                compute_reward_reach(
-                    self._phase_pred,
-                    self._tar_action,
-                    self._racket_pos,
-                    self._ball_pos,
-                    self._mvae_player._swing_type,
-                    self._reward_scales,
-                    reward_weights,
-                )
-            )
-        elif reward_type == "return":
-            self.rew_buf[:], self._sub_rewards, self._sub_rewards_names = (
-                compute_reward_return(
-                    self._phase_pred,
-                    self._racket_pos,
-                    self._ball_pos,
-                    self._physics_player.task._has_racket_ball_contact,
-                    self._physics_player.task._has_bounce,
-                    self._physics_player.task._bounce_pos,
-                    self._target_bounce_pos,
-                    self._mvae_player._swing_type,
-                    self._reward_scales,
-                    reward_weights,
-                )
-            )
-        elif reward_type == "return_w_estimate":
-            self.rew_buf[:], self._sub_rewards, self._sub_rewards_names = (
-                compute_reward_return_w_estimate(
-                    self._racket_pos,
-                    self._phase_pred,
-                    self._mvae_player._swing_type_cycle,
-                    self._ball_pos,
-                    self._physics_player.task._has_racket_ball_contact,
-                    self._est_bounce_pos,
-                    self._est_bounce_time,
-                    self._est_bounce_in,
-                    self._target_bounce_pos,
-                    self._reward_scales,
-                    reward_weights,
-                )
-            )
+        # Compute base rewards (e.g., contact, distance)
+        pos_reward = compute_pos_reward(
+            self._racket_pos,
+            self._phase_pred,
+            self._mvae_player._swing_type_cycle,
+            self._ball_pos,
+            self._physics_player.task._has_racket_ball_contact,
+            self._reward_scales,
+            reward_weights,
+        )
+        # Get 'miss' and 'out' from _compute_reset()
+        miss = self._reset_recovery_buf & ~self._physics_player.task._has_racket_ball_contact
+        out = (self._tar_action == 0) & self._physics_player.task._has_bounce & ~self._bounce_in
+
+        # Compute win and lose rewards
+        win_reward, lose_penalty = compute_win_reward_and_lose_penalty(
+            self.reset_buf,
+            miss,
+            out,
+            reward_weights,
+        )
+
+        # Reward for ball bouncing in court (estimated)
+        bounce_in_reward = compute_bounce_in_reward(
+            self._est_bounce_in,
+            reward_weights,
+        )
+
+        # Reward for ball bouncing near the edges of the court (estimated)
+        bounce_pos_reward = compute_bounce_pos_reward(
+            self._est_bounce_pos,
+            self._court_min,
+            self._court_max,
+            reward_weights,
+        )
+
+        # Total reward
+        self.rew_buf[:] = pos_reward + win_reward + lose_penalty + bounce_in_reward + bounce_pos_reward
+ 
+        # Update sub_rewards and sub_rewards_names
+        self._sub_rewards = torch.stack(
+            [pos_reward, win_reward, lose_penalty, bounce_in_reward, bounce_pos_reward], dim=-1
+        )
+
+        self._sub_rewards_names = "pos_reward,win_reward,lose_penalty,bounce_in_reward,bounce_pos_reward"
 
     def _compute_reset(self):
         has_contact = self._physics_player.task._has_racket_ball_contact
@@ -620,112 +663,27 @@ def check_out_of_court(root_pos, court_min, court_max):
 
 
 @torch.jit.script
-def compute_reward_reach(
-    phase, tar_action, racket_pos, ball_pos, swing_type, scales, weights
-):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Dict[str, float], Dict[str, float]) -> Tuple[Tensor, Tensor, str]
+def compute_pos_reward(
+    racket_pos: torch.Tensor,
+    phase: torch.Tensor,
+    swing_type: torch.Tensor,
+    ball_pos: torch.Tensor,
+    has_contact: torch.Tensor,
+    scales: Dict[str, float],
+    weights: Dict[str, float],
+) -> torch.Tensor:
+    # print("racket_pos", racket_pos.tolist())
+    # print("phase", phase.tolist())
+    # print("swing_type", swing_type.tolist())
+    # print("ball_pos", ball_pos.tolist())
+    # print("has_contact", has_contact.tolist())
+    # print("scales", scales)
+    # print("weights", weights)
 
-    mask_reaction = tar_action == 1
-
-    # position
-    pos_diff = ball_pos - racket_pos
-    pos_err = torch.sum(pos_diff * pos_diff, dim=-1)
-
-    contact_phase = torch.where(
-        swing_type == -1,
-        torch.ones_like(phase) * 3,
-        torch.ones_like(phase) * math.pi,
-    )
-    phase_diff_rea = phase - contact_phase
-    phase_err_rea = phase_diff_rea * phase_diff_rea
-
-    pos_reward = (
-        mask_reaction
-        * torch.exp(-scales.get("pos", 5.0) * pos_err)
-        * torch.exp(-scales.get("phase", 10.0) * phase_err_rea)
-    )
-
-    # all rewards
-    reward = pos_reward * weights.get("pos", 1.0)
-    sub_rewards = torch.stack([pos_reward], dim=-1)
-    sub_rewards_names = "pos_reward"
-
-    return reward, sub_rewards, sub_rewards_names
-
-
-@torch.jit.script
-def compute_reward_return(
-    phase,
-    racket_pos,
-    ball_pos,
-    has_contact,
-    has_bounce,
-    bounce_pos,
-    target_pos,
-    swing_type,
-    scales,
-    weights,
-):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Dict[str, float], Dict[str, float]) -> Tuple[Tensor, Tensor, str]
-
-    w_pos, w_bounce = weights.get("pos", 0.0), weights.get("ball_pos", 0.0)
+    w_pos = weights.get("pos", 0.0)
 
     # position
-    pos_diff = ball_pos - racket_pos
-    pos_err = torch.sum(pos_diff * pos_diff, dim=-1)
-
-    contact_phase = torch.where(
-        swing_type >= 2,
-        torch.ones_like(phase) * 3,
-        torch.ones_like(phase) * math.pi,
-    )
-    phase_diff_rea = phase - contact_phase
-    phase_err_rea = phase_diff_rea * phase_diff_rea
-
-    pos_reward = ~has_contact * torch.exp(
-        -scales.get("pos", 5.0) * pos_err
-    ) * torch.exp(
-        -scales.get("phase", 10.0) * phase_err_rea
-    ) + has_contact * torch.ones_like(
-        pos_err
-    )
-
-    # outgoing ball pos
-    pos_err = torch.where(
-        has_bounce,
-        torch.sum((bounce_pos - target_pos) ** 2, dim=-1),
-        torch.sum((ball_pos - target_pos) ** 2, dim=-1),
-    )
-    # ball_pos_reward = has_contact * torch.exp(-0.05 * pos_err)
-    ball_pos_reward = has_contact * torch.clamp((400 - pos_err) / 400, 0.0, 1.0)
-
-    # all rewards
-    reward = w_pos * pos_reward + w_bounce * ball_pos_reward
-    sub_rewards = torch.stack([pos_reward, ball_pos_reward], dim=-1)
-    sub_rewards_names = "pos_reward,ball_pos_reward"
-
-    return reward, sub_rewards, sub_rewards_names
-
-
-@torch.jit.script
-def compute_reward_return_w_estimate(
-    racket_pos,
-    phase,
-    swing_type,
-    ball_pos,
-    has_contact,
-    bounce_pos,
-    bounce_time,
-    bounce_in,
-    target_pos,
-    scales,
-    weights,
-):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Dict[str, float], Dict[str, float]) -> Tuple[Tensor, Tensor, str]
-
-    w_pos, w_bounce = weights.get("pos", 0.0), weights.get("ball_pos", 0.0)
-
-    # position
+    print(ball_pos)
     pos_diff = ball_pos - racket_pos
     pos_err = torch.sum(pos_diff * pos_diff, dim=-1)
 
@@ -746,18 +704,92 @@ def compute_reward_return_w_estimate(
         pos_err
     )
 
-    # outgoing ball bounce
-    pos_err = torch.sum((bounce_pos - target_pos) ** 2, dim=-1)
-    # same reward for all steps
-    ball_pos_reward = (
-        bounce_in
-        * torch.exp(-scales.get("bounce_pos", 0.05) * pos_err)
-        * torch.exp(-scales.get("bounce_time", 0.1) * bounce_time)
-    )
-
     # all rewards
-    reward = w_pos * pos_reward + w_bounce * ball_pos_reward
-    sub_rewards = torch.stack([pos_reward, ball_pos_reward], dim=-1)
-    sub_rewards_names = "pos_reward,ball_pos_reward"
+    pos_reward = w_pos * pos_reward
+    # print("pos_rewards:", pos_reward.tolist())
 
-    return reward, sub_rewards, sub_rewards_names
+    return pos_reward
+
+@torch.jit.script
+def compute_win_reward_and_lose_penalty(
+    reset_buf: torch.Tensor,
+    miss: torch.Tensor,
+    out: torch.Tensor,
+    weights: Dict[str, float],
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Compute the win and lose rewards for the agent."""
+    # Agent won the point if the opponent hit out
+    won_point = reset_buf & out
+
+    # Agent lost the point if they missed the ball
+    lost_point = reset_buf & miss
+
+    # Scaling factors
+    win_scale = weights.get("win", 10.0)
+    lose_scale = weights.get("lose", 10.0)
+
+    # Compute rewards
+    win_reward = won_point.float() * win_scale
+    lose_penalty = lost_point.float() * (-lose_scale)
+
+    return win_reward, lose_penalty
+
+@torch.jit.script
+def compute_bounce_in_reward(
+    est_bounce_in: torch.Tensor,
+    weights: Dict[str, float],
+) -> torch.Tensor:
+    """Compute the reward for the ball bouncing within the court.
+
+    Args:
+        est_bounce_in (torch.Tensor): Tensor indicating if the estimated bounce is within the court (True/False).
+        weights (Dict[str, float]): Dictionary containing scaling factors for rewards.
+
+    Returns:
+        torch.Tensor: Tensor of bounce-in rewards for each environment.
+    """
+    # Scaling factor for bounce-in reward
+    bounce_in_scale = weights.get("bounce_in", 5.0)
+
+    # Reward is bounce_in_scale if the ball bounces in, else zero
+    bounce_in_reward = est_bounce_in.float() * bounce_in_scale
+    
+
+    return bounce_in_reward
+
+@torch.jit.script
+def compute_bounce_pos_reward(
+    est_bounce_pos: torch.Tensor,
+    court_min: torch.Tensor,
+    court_max: torch.Tensor,
+    weights: Dict[str, float],
+) -> torch.Tensor:
+    """Compute the reward based on the estimated bounce position within the court.
+
+    Args:
+        est_bounce_pos (torch.Tensor): Estimated bounce positions (x, y, z) for each environment.
+        court_min (torch.Tensor): Minimum x and y coordinates of the court.
+        court_max (torch.Tensor): Maximum x and y coordinates of the court.
+        weights (Dict[str, float]): Dictionary containing scaling factors for rewards.
+
+    Returns:
+        torch.Tensor: Tensor of bounce position rewards for each environment.
+    """
+    # Scaling factor for bounce position reward
+    bounce_pos_scale = weights.get("bounce_pos", 1.0)
+
+    # Normalize bounce positions to range [0, 1] within the court
+    court_range = court_max - court_min  # (x_range, y_range)
+    est_bounce_pos_normalized = (est_bounce_pos[:, :2] - court_min) / court_range
+
+    # Distance to the center (0.5, 0.5) represents central court; farther means closer to edges
+    center = torch.tensor([0.5, 0.5], device=est_bounce_pos.device)
+    distance_to_center = torch.norm(est_bounce_pos_normalized - center, dim=-1)
+
+    # reward is 0 if outside the court. 1 if at the edge. 0 if at the center
+    bounce_pos_reward = (1 - distance_to_center) * bounce_pos_scale
+
+    # Clip the reward to be non-negative
+    bounce_pos_reward = torch.clamp(bounce_pos_reward, min=0)
+
+    return bounce_pos_reward

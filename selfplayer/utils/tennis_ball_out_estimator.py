@@ -122,6 +122,29 @@ def simulate_without_bounce(gym, sim, launch_pos, launch_vel, launch_vspin, para
 
 
 class TennisBallOutEstimator():
+    """
+    A class to estimate the trajectory and bounce position of a tennis ball based on its velocity and spin.
+    Attributes:
+    -----------
+    _ball_traj_out_x : torch.Tensor
+        Tensor containing precomputed x-coordinates of the ball's trajectory.
+    _ball_traj_out_y : torch.Tensor
+        Tensor containing precomputed y-coordinates of the ball's trajectory.
+    params : object
+        An object containing various parameters for trajectory estimation.
+    Methods:
+    --------
+    __init__(ball_traj_out_x_file, ball_traj_out_y_file):
+        Initializes the estimator with precomputed trajectory data.
+    get_ball_traj_out_index(vel_x, vel_y, vspin):
+        Computes the index for the ball's trajectory based on its velocity and spin.
+    get_ball_traj_out_x_index(x):
+        Computes the index for the ball's x-coordinate trajectory.
+    get_ball_traj_out_y_index(y):
+        Computes the index for the ball's y-coordinate trajectory.
+    estimate(ball_states_all):
+        Estimates the bounce position, bounce time, and maximum height of the ball based on its state.
+    """
     def __init__(self, ball_traj_out_x_file, ball_traj_out_y_file):
         self._ball_traj_out_x = np.load(ball_traj_out_x_file)
         self._ball_traj_out_y = np.load(ball_traj_out_y_file)

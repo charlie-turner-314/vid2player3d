@@ -105,9 +105,6 @@ class RLGPUEnv(vecenv.IVecEnv):
 
         if self.use_global_obs:
             info['state_space'] = self.env.state_space
-            print(info['action_space'], info['observation_space'], info['state_space'])
-        else:
-            print(info['action_space'], info['observation_space'])
 
         return info
     
@@ -126,13 +123,6 @@ def build_alg_runner(algo_observer: RLGPUAlgoObserver) -> Runner:
     runner.player_factory.register_builder('selfplayer', lambda **kwargs : SelfPlayerPlayer(**kwargs))     # testing agent
     runner.model_builder.model_factory.register_builder('selfplayer', lambda network, **kwargs : SelfPlayerModel(network))    # network wrapper
     runner.model_builder.network_factory.register_builder('selfplayer', lambda **kwargs : SelfPlayerBuilder())     # actuall network definition class
-    # runner.model_builder.network_factory.register_builder('vid2player_dual', lambda **kwargs : V2PBuilderDual())     # actuall network definition class
-    # runner.model_builder.network_factory.register_builder('vid2player_dual_v2', lambda **kwargs : V2PBuilderDualV2())     # actuall network definition class
-
-    # TESTING & VISUALISATION
-    # runner.model_builder.network_factory.register_builder('vid2player', lambda **kwargs : V2PBuilder())
-    runner.model_builder.network_factory.register_builder('selfplayer', lambda **kwargs : V2PBuilderDual())
-
 
     return runner
 

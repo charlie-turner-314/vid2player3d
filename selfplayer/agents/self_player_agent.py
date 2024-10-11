@@ -1,24 +1,26 @@
-from rl_games.algos_torch import torch_ext
-from rl_games.common import a2c_common
-
-import learning.common_agent as common_agent 
-from utils.common import AverageMeter, get_eta_str
-
-import torch 
+# self_player_agent.py
+import torch
 import time
 import os
 import numpy as np
 from torch import nn
+from tensorboardX import SummaryWriter
+import comet_ml
+from rl_games.algos_torch import torch_ext
+from rl_games.common import a2c_common
+import learning.common_agent as common_agent
+from utils.common import AverageMeter, get_eta_str
 from tqdm import tqdm
 
 
 class SelfPlayerAgent(common_agent.CommonAgent):
     def __init__(self, base_name, config):
-        print("INITIALIZING SELF PLAYER AGENT")
         super().__init__(base_name, config)
+        self.sub_rewards_names = None
+        self.log_dict = dict()
         self.task = self.vec_env.env.task
-        print("TASK:", self.task.__class__.__name__)
-        print("SELF PLAYER AGENT INITIALIZED")
+        self.writer = SummaryWriter(log_dir=self.network_path)
+        self.use_comet = config.get('use_comet', False)
     
     def restore(self, cp_name):
         cp_path = os.path.join(self.network_path, f"{self.config['name']}_{cp_name}.pth")
@@ -30,6 +32,8 @@ class SelfPlayerAgent(common_agent.CommonAgent):
         model_state_dict = self.model.state_dict()
 
         missing_checkpoint_keys = [key for key in model_state_dict if key not in checkpoint['model']]
+        print('Keys in model:', model_state_dict.keys())
+        print('Keys in checkpoint:', checkpoint['model'].keys())
         print('Keys not found in current model:', [key for key in checkpoint['model'] if key not in model_state_dict])
         print('Keys not found in checkpoint:', missing_checkpoint_keys)
 
@@ -98,64 +102,129 @@ class SelfPlayerAgent(common_agent.CommonAgent):
     
     def train(self):
         print("TRAIN")
-        self.init_tensors()                     # Initialize observation and value tensors
-        self.last_mean_rewards = -100500        # Set rewards to a very low value
+        self.init_tensors()
+        self.last_mean_rewards = -100500
         self.best_mean_rewards = -100500
-        self.obs = self.env_reset()             # Reset the environment and use the observation as the current observation
-        self.curr_frames = self.batch_size_envs # NOTE: Not sure what current frames are
+        self.obs = self.env_reset()
+        self.curr_frames = self.batch_size_envs
+        self.frame = 0  # Initialize frame counter
+        total_time = 0
+        start_time = time.time()
 
         pretrained_model_cp = self.config.get('pretrained_model_cp', None)
         if pretrained_model_cp is not None and not self.config.get('load_checkpoint', False):
             self.load_pretrained(pretrained_model_cp)
-        
-        # MULTIGPU STUFF WOULD GO HERE
 
-        self._init_train() # Don't think this does anything in this case
+        # Initialize logging variables
+        self.sub_rewards_names = None
+        self.log_dict = dict()
 
-        while True: # Train forever? i'd like to do a tqdm here 
-            if hasattr(self.task, 'pre_epoch'): 
-                self.task.pre_epoch(self.epoch_num) # Do any pre-epoch stuff
-            
-            epoch_num = self.update_epoch() # Increment the epoch number
-            train_info = self.train_epoch() # Train the epoch
+        # Initialize the experiment (Comet.ml)
+        if self.use_comet:
+            self.exp = comet_ml.Experiment()
 
-            # Log the training info
-            print(self.rank)
+        while True:
+            if hasattr(self.task, 'pre_epoch'):
+                self.task.pre_epoch(self.epoch_num)
+
+            epoch_num = self.update_epoch()
+            train_info = self.train_epoch()
+
+            # Calculate times
+            sum_time = train_info['total_time']
+            play_time = train_info['play_time']
+            update_time = train_info['update_time']
+            total_time += sum_time
+            curr_frames = self.curr_frames
+            self.frame += curr_frames
+
+            # Logging
             if self.rank == 0:
                 self.log_dict = dict()
+                scaled_time = sum_time
+                scaled_play_time = train_info['play_time']
+                fps_step = curr_frames / scaled_play_time
+                fps_total = curr_frames / scaled_time
+                mean_lengths = self.game_lengths.get_mean() if self.game_rewards.current_size > 0 else 0
 
+                print('{}\tT_play {:.2f}\tT_update {:.2f}\tETA {}\tstep_rewards {:.10f} {}\teps_len {:.2f}\tfps step {}\tfps total {}\t{}'
+                    .format(epoch_num, play_time, update_time, get_eta_str(epoch_num, self.max_epochs, sum_time),
+                            self.step_rewards.avg.item(),
+                            np.array2string(self.step_sub_rewards.avg.cpu().numpy(), formatter={'all': lambda x: '%.4f' % x}, separator=',')
+                            if self.sub_rewards_names is not None else '',
+                            mean_lengths, fps_step, fps_total, self.config['args'].cfg))
+
+                # Update log_dict with performance metrics
+                self.log_dict.update({'frame': self.frame, 'epoch_num': epoch_num, 'total_time': total_time})
+                self.log_dict.update({'performance/total_fps': fps_total})
+                self.log_dict.update({'performance/step_fps': fps_step})
+                self.log_dict.update({'performance/update_time': update_time})
+                self.log_dict.update({'performance/play_time': play_time})
+
+                # Update log_dict with losses
+                self.log_dict.update({'losses/a_loss': torch_ext.mean_list(train_info['actor_loss']).item()})
+                self.log_dict.update({'losses/c_loss': torch_ext.mean_list(train_info['critic_loss']).item()})
+                self.log_dict.update({'losses/bounds_loss': torch_ext.mean_list(train_info['b_loss']).item()})
+                self.log_dict.update({'losses/entropy': torch_ext.mean_list(train_info['entropy']).item()})
+                # Add auxiliary losses if any
+                aux_losses_dict = {k: torch_ext.mean_list(v).item() for k, v in train_info.items() if k.startswith('aux_')}
+                for key, value in aux_losses_dict.items():
+                    self.log_dict['aux_losses/' + key] = value
+
+                # Update log_dict with info
+                self.log_dict.update({'info/epochs': epoch_num})
+                self.log_dict.update({'info/last_lr': train_info['last_lr'][-1] * train_info['lr_mul'][-1]})
+                self.log_dict.update({'info/lr_mul': train_info['lr_mul'][-1]})
+                self.log_dict.update({'info/e_clip': self.e_clip * train_info['lr_mul'][-1]})
+                self.log_dict.update({'info/clip_frac': torch_ext.mean_list(train_info['actor_clip_frac']).item()})
+                self.log_dict.update({'info/kl': torch_ext.mean_list(train_info['kl']).item()})
+
+                # Update log_dict with rewards
+                self.log_dict.update({'step_rewards': self.step_rewards.avg.item()})
+                if self.sub_rewards_names is not None:
+                    for i, name in enumerate(self.sub_rewards_names.split(',')):
+                        self.log_dict.update({f'sub_rewards/{name}': self.step_sub_rewards.avg[i].item()})
+
+                # Update game rewards and lengths
+                mean_rewards = self._get_mean_rewards()
                 if self.game_rewards.current_size > 0:
                     mean_rewards = self._get_mean_rewards()
                     mean_lengths = self.game_lengths.get_mean()
-
                     for i in range(self.value_size):
                         self.log_dict.update({'game_rewards{0}'.format(i): mean_rewards[i]})
                     self.log_dict.update({'episode_lengths': mean_lengths})
 
                     if self.has_self_play_config:
                         self.self_play_manager.update(self)
-                # Save the model
-                latest_model_file = os.path.join(self.network_path, f"{self.config['name']}_latest")
-                best_model_file = os.path.join(self.network_path, f"{self.config['name']}_best")
-                if self.save_best_after > 0:
-                    if (epoch_num % self.save_best_after == 0):
-                        self.save(latest_model_file)
-                if self.save_freq > 0:
-                    if (epoch_num % self.save_freq == 0):
-                        epoch_model_file = os.path.join(self.network_path, f"{self.config['name']}_epoch{epoch_num:05d}")
-                        self.save(epoch_model_file)
-                if self.game_rewards.current_size > 0 and mean_rewards[0] > self.best_mean_rewards + 1:
-                    self.best_mean_rewards = mean_rewards[0]
-                    print("Update best mean game rewards => ", self.best_mean_rewards)
-                    self.save(best_model_file)
+
+                # Write logs to TensorBoard
+                for key, value in self.log_dict.items():
+                    self.writer.add_scalar(key, value, self.frame)
+
+                # Log metrics to Comet.ml
+                if self.use_comet:
+                    self.exp.log_metrics(self.log_dict, step=epoch_num)
+
+                # Save models
+                self.save_models(epoch_num, mean_rewards)
+
                 if epoch_num >= self.max_epochs:
-                    self.save(latest_model_file)
-                    print('MAX EPOCHS NUM!')
+                    if self.use_comet:
+                        self.exp.end()
                     return self.last_mean_rewards, epoch_num
 
-            print("Epoch Complete")
-
-        print("Training Complete")
+    def save_models(self, epoch_num, mean_rewards):
+        latest_model_file = os.path.join(self.network_path, f"{self.config['name']}_latest")
+        best_model_file = os.path.join(self.network_path, f"{self.config['name']}_best")
+        if self.save_best_after > 0 and (epoch_num % self.save_best_after == 0):
+            self.save(latest_model_file)
+        if self.save_freq > 0 and (epoch_num % self.save_freq == 0):
+            epoch_model_file = os.path.join(self.network_path, f"{self.config['name']}_epoch{epoch_num:05d}")
+            self.save(epoch_model_file)
+        if self.game_rewards.current_size > 0 and mean_rewards[0] > self.best_mean_rewards + 1:
+            self.best_mean_rewards = mean_rewards[0]
+            print("Update best mean game rewards => ", self.best_mean_rewards)
+            self.save(best_model_file)
 
     def _eval_critic(self, obs_dict):
         self.model.eval() # Set the model to evaluation mode
@@ -167,7 +236,6 @@ class SelfPlayerAgent(common_agent.CommonAgent):
         return value
     
     def play_steps(self) -> dict:
-        print("PLAY STEPS")
         self.set_eval() # call .eval() on the pytorch model 
 
         done_indices = [] # Keep track of terminated environments during each step
@@ -211,6 +279,7 @@ class SelfPlayerAgent(common_agent.CommonAgent):
   
             self.game_rewards.update(self.current_rewards[done_indices])
             self.game_lengths.update(self.current_lengths[done_indices])
+
             self.step_rewards.update(rewards.mean(dim=0))
             if infos['sub_rewards'] is not None:
                 self.step_sub_rewards.update(infos['sub_rewards'].mean(dim=0))
@@ -326,7 +395,6 @@ class SelfPlayerAgent(common_agent.CommonAgent):
         # parameters = [p for p in self.model.parameters() if p.grad is not None]
         # device = parameters[0].grad.device
         # total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), 2).to(device) for p in parameters]), 2)
-        # print('total_norm:', total_norm)
 
         if self.truncate_grads:
             if self.multi_gpu:

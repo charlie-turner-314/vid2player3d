@@ -14,7 +14,6 @@ import torch
 
 class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
     def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless):
-        print("HUMANOID SMPL IM MVAE DUAL")
         super().__init__(cfg=cfg,
                          sim_params=sim_params,
                          physics_engine=physics_engine,
@@ -23,7 +22,7 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
                          headless=headless)
         
         self._ball_in_estimator = TennisBallInEstimator(
-            self.cfg_v2p.get('ball_traj_file', 'vid2player/data/ball_traj/ball_traj_in_est_spin5_subs6.npy'))
+            self.cfg_v2p.get('ball_traj_file', 'vid2player/data/ball_traj/ball_traj_in_dual.npy'))
     
     def create_sim(self):
         super().create_sim()
@@ -54,15 +53,15 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         traj_serve = None
         if len(reset_actor_recovery_env_ids) > 0:
             # set init ball traj for the other player
-            self._ball_root_states[reset_actor_recovery_env_ids, :3] = self._mvae_player._racket_pos[reset_actor_recovery_env_ids]
-            self._ball_root_states[reset_actor_recovery_env_ids, 10:13] = torch.FloatTensor([-40, 0, 0]).to(self.device)
+            self._ball_root_states[reset_actor_recovery_env_ids, :3] = self._mvae_player._racket_pos[reset_actor_recovery_env_ids] # Start the ball at the 'recovering' player's racket position
+            self._ball_root_states[reset_actor_recovery_env_ids, 10:13] = torch.FloatTensor([-40, 0, 0]).to(self.device)  # Start with -40 spin?
 
             # use random ball velocity
-            num_envs = len(reset_actor_recovery_env_ids)
+            num_envs = len(reset_actor_recovery_env_ids) # Number of environments to 
             self._ball_root_states[reset_actor_recovery_env_ids, 7] = torch.rand(num_envs).to(self.device) * 4 + -2
             self._ball_root_states[reset_actor_recovery_env_ids, 8] = torch.rand(num_envs).to(self.device) * 4 + 28
             self._ball_root_states[reset_actor_recovery_env_ids, 9] = torch.rand(num_envs).to(self.device) * 3 + 5
-        
+
         # sample ball traj to start from contact player's racket pos
         # copy the ball state from the contact player and reverse it
         contact_env_ids = get_opponent_env_ids(reset_ball_env_ids)

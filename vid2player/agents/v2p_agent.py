@@ -1,3 +1,4 @@
+# v2p_agent.py
 from rl_games.algos_torch import torch_ext
 from rl_games.common import a2c_common
 
@@ -107,6 +108,7 @@ class V2PAgent(common_agent.CommonAgent):
         start_time = time.time()
         total_time = 0
         self.frame = 0
+        print("INITIAL RESET")
         self.obs = self.env_reset()
         self.curr_frames = self.batch_size_envs
 
@@ -248,6 +250,7 @@ class V2PAgent(common_agent.CommonAgent):
         self.step_rewards = AverageMeter()
         self.step_sub_rewards = AverageMeter()
 
+        print("RESETTING DONE ENVS: ", done_indices)
         self.obs = self.env_reset(done_indices)
         for n in range(self.horizon_length):
             self.experience_buffer.update_data('obses', n, self.obs['obs'])

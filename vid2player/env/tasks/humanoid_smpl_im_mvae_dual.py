@@ -28,11 +28,14 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         super().create_sim()
 
     def reset(self, reset_actor_reaction_env_ids, reset_ball_env_ids):
+        print("RESET", reset_actor_reaction_env_ids, reset_ball_env_ids)
         return self._reset_envs(reset_actor_reaction_env_ids, reset_ball_env_ids)
 
     def _reset_envs(self, reset_actor_reaction_env_ids, reset_ball_env_ids):
         reset_actor_recovery_env_ids = get_opponent_env_ids(reset_actor_reaction_env_ids)
         reset_actor_env_ids = torch.cat([reset_actor_reaction_env_ids, reset_actor_recovery_env_ids])
+        print("reset_actor_env_ids: ", reset_actor_env_ids)
+        print("reset_ball_env_ids: ", reset_ball_env_ids)
         if len(reset_actor_env_ids) > 0:
             self._reset_actors(reset_actor_env_ids)
         if len(reset_ball_env_ids) > 0:
@@ -50,11 +53,13 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         return traj
 
     def _reset_balls(self, reset_actor_recovery_env_ids, reset_ball_env_ids):
+        print("RESET_ACTOR_RECOVERY_ENV_IDS: ", reset_actor_recovery_env_ids)
+        print("RESET_BALL_ENV_IDS: ", reset_ball_env_ids)
         traj_serve = None
         if len(reset_actor_recovery_env_ids) > 0:
             # set init ball traj for the other player
             self._ball_root_states[reset_actor_recovery_env_ids, :3] = self._mvae_player._racket_pos[reset_actor_recovery_env_ids]
-            self._ball_root_states[reset_actor_recovery_env_ids, 10:13] = torch.FloatTensor([-40, 0, 0]).to(self.device)
+            self._ball_root_states[reset_actor_recovery_env_ids, 10:13] = torch.FloatTensor([-40, 0, 0]).to(self.device) #
 
             # use random ball velocity
             num_envs = len(reset_actor_recovery_env_ids)
@@ -65,6 +70,7 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         # sample ball traj to start from contact player's racket pos
         # copy the ball state from the contact player and reverse it
         contact_env_ids = get_opponent_env_ids(reset_ball_env_ids)
+        print("CONTACT ENV IDS: ", contact_env_ids)
         traj, ball_states_in, ball_states_out = self._ball_in_estimator.estimate(
             self._ball_root_states[contact_env_ids],
             adjust=self.cfg_v2p.get('adjust_ball'),
@@ -77,6 +83,8 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         self._has_racket_ball_contact[reset_ball_env_ids] = 0
         self._ball_pos[reset_ball_env_ids] = self._ball_root_states[reset_ball_env_ids, 0:3]
         self._ball_vel[reset_ball_env_ids] = self._ball_root_states[reset_ball_env_ids, 7:10]
+
+        print("ball pos: ", self._ball_pos[reset_ball_env_ids])
 
         return traj
 

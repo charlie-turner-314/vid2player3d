@@ -257,26 +257,15 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
         self._reset_ref_motion_bodies = torch.zeros((self.num_envs, self.cfg['env'].get('gender_beta_dim', 11)), device=self.device)
         # set gender as male (HARD CODE)
         self._reset_ref_motion_bodies[:, 0] = 1
-        if self.cfg_v2p.get('dual_mode') == 'different':
-            self._reset_ref_motion_bodies[::2, 1:11] = torch.FloatTensor(self.cfg_v2p['smpl_beta'][0])
-            self._reset_ref_motion_bodies[1::2, 1:11] = torch.FloatTensor(self.cfg_v2p['smpl_beta'][1])
-        else:
-            self._reset_ref_motion_bodies[:, 1:11] = torch.FloatTensor(self.cfg_v2p['smpl_beta'])
+        self._reset_ref_motion_bodies[:, 1:11] = torch.FloatTensor(self.cfg_v2p['smpl_beta'])
     
         # load existing humanoid asset
         motion_ids = np.zeros(self.num_envs, dtype=int)
         asset_root = self.cfg["env"]["asset"]["assetRoot"]
         asset_file = self.cfg["env"]["asset"]["assetFileName"]
-        if self.cfg_v2p.get('dual_mode') == 'different':
-            for i, file in enumerate(asset_file):
-                humanoid_asset = self.gym.load_asset(self.sim, asset_root, file, asset_options)
-                self.humanoid_assets[i] = humanoid_asset
-                self.humanoid_files[i] = os.path.join(asset_root, file)
-            motion_ids[1::2] = 1
-        else:
-            humanoid_asset = self.gym.load_asset(self.sim, asset_root, asset_file, asset_options)
-            self.humanoid_assets[0] = humanoid_asset
-            self.humanoid_files[0] = os.path.join(asset_root, asset_file)
+        humanoid_asset = self.gym.load_asset(self.sim, asset_root, asset_file, asset_options)
+        self.humanoid_assets[0] = humanoid_asset
+        self.humanoid_files[0] = os.path.join(asset_root, asset_file)
 
         self.humanoid_asset = humanoid_asset
         self._setup_character_props(self.cfg["env"]["keyBodies"])
@@ -594,6 +583,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
         self._compute_observations()
         if torch.isnan(self.obs_buf).any():
             print("Found NAN in physics player obersavations")
+            print(self.obs_buf)
             pdb.set_trace()
 
     def _set_target_motion_state(self, env_ids=None):
@@ -803,9 +793,6 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             has_racket_ball_contact_now = ~self._has_racket_ball_contact & \
                 (self._ball_root_states[:, 8] > 0) & \
                 ((self._ball_root_states[:, 8] - self._ball_vel[:, 1]) > 10)
-            # print out number of contacts
-            if has_racket_ball_contact_now.sum() > 0:
-                print(f"Contact detected: {has_racket_ball_contact_now.sum()}")
             self._has_racket_ball_contact_now = has_racket_ball_contact_now
             self._has_racket_ball_contact |= has_racket_ball_contact_now
         
@@ -838,13 +825,8 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             'eastern': [0, 1, 0],
             'semi_western': [0, 1./math.sqrt(2), 1./math.sqrt(2)],
         }
-        if self.cfg_v2p.get('dual_mode') == 'different':
-            grip = self.cfg_v2p['grip']
-            normal = torch.FloatTensor([racket_normal_dict[grip[0]], racket_normal_dict[grip[1]]]).repeat(self.num_envs//2, 1).unsqueeze(-1)
-            self._racket_normal[:] = torch.matmul(rb_rotmat_wrist, normal.to(self.device))[..., 0]
-        else:
-            normal = racket_normal_dict[self.cfg_v2p.get('grip', 'eastern')]
-            self._racket_normal[:] = torch.matmul(rb_rotmat_wrist, torch.FloatTensor(normal).to(self.device))
+        normal = racket_normal_dict[self.cfg_v2p.get('grip', 'eastern')]
+        self._racket_normal[:] = torch.matmul(rb_rotmat_wrist, torch.FloatTensor(normal).to(self.device))
 
         self._ball_pos[:] = self._ball_root_states[:, 0:3]
         self._ball_vel[:] = self._ball_root_states[:, 7:10]
@@ -1025,7 +1007,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
         print("Optimizing two hand swing ...")
         for iter in tqdm(range(niters)):
             optimizer.step(closure)
-        print(loss_dict['target'].item(), loss_dict['reg'].item(), loss_dict['smooth'].item())
+        print( "whaaaaaat", loss_dict['target'].item(), loss_dict['reg'].item(), loss_dict['smooth'].item())
 
         # update final result
         joint_rot_ik = joint_rot_ik_origin + rot_delta

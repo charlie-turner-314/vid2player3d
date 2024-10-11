@@ -68,13 +68,13 @@ class TennisBallInEstimator():
         ball_states_in[:, 7:9] = - vel_x.view(-1, 1) * dir
         ball_states_in[:, 9] = vel_y
         ball_states_in[:, 10:13] = vspin.view(-1, 1) * pi * 2 * F.normalize(
-        torch.cross(ball_states_in[:, 7:10], torch.FloatTensor([0, 0, -1]).repeat(ball_states.shape[0], 1).to(device)), dim=1)
+        torch.linalg.cross(ball_states_in[:, 7:10], torch.FloatTensor([0, 0, -1]).repeat(ball_states.shape[0], 1).to(device)), dim=1)
 
         ball_states_out = ball_states_in.clone()
         ball_states_out[:, :2] *= -1
         ball_states_out[:, 7:9] *= -1
         ball_states_out[:, 10:13] = vspin.view(-1, 1) * pi * 2 * F.normalize(
-        torch.cross(ball_states_out[:, 7:10], torch.FloatTensor([0, 0, -1]).repeat(ball_states.shape[0], 1).to(device)), dim=1)
+        torch.linalg.cross(ball_states_out[:, 7:10], torch.FloatTensor([0, 0, -1]).repeat(ball_states.shape[0], 1).to(device)), dim=1)
 
         return traj_trans, ball_states_in, ball_states_out
 

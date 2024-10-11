@@ -93,6 +93,7 @@ class MVAEPlayer:
 
         # hard code gender as male
         gender = "male"
+        print(self.cfg.get("smpl_beta", [[0] * 10]))
         self._smpl = SMPL(
             SMPL_MODEL_DIR,
             create_transl=False,
@@ -264,41 +265,41 @@ class MVAEPlayer:
             reset_recovery_env_ids
         ].clone()
 
-        if self._is_dual: # DUAL
-            serve_from = self.cfg.get("serve_from", "near")
-            self._update_mvae_state(
-                self._conditions[env_ids[::2], -1],
-                phase=None,
-                env_ids=env_ids[::2],
-                init=True,
-                mvae=self._mvae1,
-                residual_joint_inds=self._residual_joint_inds[0],
-                serving=serve_from == "near",
-            )
-            self._update_mvae_state(
-                self._conditions[env_ids[1::2], -1],
-                phase=None,
-                env_ids=env_ids[1::2],
-                init=True,
-                mvae=self._mvae2,
-                residual_joint_inds=self._residual_joint_inds[1],
-                serving=serve_from == "far",
-            )
-        else:
-            self._update_mvae_state(
-                self._conditions[env_ids, -1], phase=None, env_ids=env_ids, init=True
-            )
+        # if self._is_dual: # DUAL
+        serve_from = self.cfg.get("serve_from", "near")
+        self._update_mvae_state(
+            self._conditions[env_ids[::2], -1],
+            phase=None,
+            env_ids=env_ids[::2],
+            init=True,
+            # mvae=self._mvae1,
+            # residual_joint_inds=self._residual_joint_inds[0],
+            serving=serve_from == "near",
+        )
+        self._update_mvae_state(
+            self._conditions[env_ids[1::2], -1],
+            phase=None,
+            env_ids=env_ids[1::2],
+            init=True,
+            # mvae=self._mvae2,
+            # residual_joint_inds=self._residual_joint_inds[1],
+            serving=serve_from == "far",
+        )
+        # else:
+        #     self._update_mvae_state(
+        #         self._conditions[env_ids, -1], phase=None, env_ids=env_ids, init=True
+        #     )
 
     def step(self, latents, residual=None):
         self._latents = latents
         condition_flat = self._conditions.flatten(start_dim=1, end_dim=2)
         with torch.no_grad():
             if not self._is_dual:
-                print("SINGLE MODE STEP")
+                # print("SINGLE MODE STEP")
                 feature, phase = self._mvae.forward(latents, condition_flat)
                 self._update_mvae_state(feature, phase, residual)
             else:
-                print("DUAL MODE STEP")
+                # print("DUAL MODE STEP")
                 feature1, phase1 = self._mvae1.forward(
                     latents[::2], condition_flat[::2]
                 )

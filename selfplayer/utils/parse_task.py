@@ -5,10 +5,8 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
-from env.tasks.physics_mvae_controller import PhysicsMVAEController
-from env.tasks.physics_mvae_controller_dual import PhysicsMVAEControllerDual
-from env.tasks.mvae_controller_vis import MVAEControllerVis
-from env.tasks.mvae_controller_vis_dual import MVAEControllerVisDual
+from env.tasks.physics_selfplay_controller import PhysicsSelfPlayController
+from env.tasks.selfplay_controller_vis import SelfPlayControllerVis
 from env.tasks.vec_task_wrappers import VecTaskPythonWrapper
 
 import numpy as np
@@ -28,8 +26,8 @@ def parse_task(args, cfg, cfg_train, sim_params):
     cfg_task = cfg["env"]
     cfg_task["seed"] = cfg["seed"]
 
-    print("Attempting to create task: ", cfg['name'])
     try:
+        print("Creating task: ", cfg['name'])
         task = eval(cfg['name'])(
             cfg=cfg,
             sim_params=sim_params,

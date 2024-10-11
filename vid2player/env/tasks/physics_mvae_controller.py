@@ -1,5 +1,6 @@
 from players.mvae_player import MVAEPlayer
 from players.im_player import ImitatorPlayer
+from env.tasks.humanoid_smpl_im_mvae_dual import HumanoidSMPLIMMVAEDual
 from env.utils.player_builder import PlayerBuilder
 from utils.tennis_ball_out_estimator import TennisBallOutEstimator
 from utils.common import AverageMeter
@@ -253,8 +254,8 @@ class PhysicsMVAEController:
         )
         self._smpl = self._mvae_player._smpl
 
-        self._physics_player = None
-        self._physics_player = PlayerBuilder(self, self.cfg).build_player()
+        # self._physics_player = None
+        self._physics_player:HumanoidSMPLIMMVAEDual = PlayerBuilder(self, self.cfg).build_player()
         self._physics_player.task._smpl = self._smpl
         self._physics_player.task._mvae_player = self._mvae_player
         self._physics_player.task._controller = self
@@ -452,26 +453,27 @@ class PhysicsMVAEController:
 
         # estimate bounce position
         has_contact_now = self._physics_player.task._has_racket_ball_contact_now
-        if not self.cfg_v2p.get("dual_mode") and has_contact_now.sum() > 0:
-            has_valid_contact, bounce_pos, bounce_time, max_height = (
-                self._ball_out_estimator.estimate(
-                    self._physics_player.task._ball_root_states[has_contact_now]
-                )
-            )
-            if has_valid_contact.sum() > 0:
-                env_ids = has_contact_now.nonzero(as_tuple=False).flatten()[
-                    has_valid_contact
-                ]
-                self._est_bounce_pos[env_ids, :2] = bounce_pos
-                self._est_bounce_time[env_ids] = bounce_time
-                self._est_max_height[env_ids] = max_height
+        print("has_contact_now", has_contact_now)
+        # if not self.cfg_v2p.get("dual_mode") and has_contact_now.sum() > 0:
+        #     has_valid_contact, bounce_pos, bounce_time, max_height = (
+        #         self._ball_out_estimator.estimate(
+        #             self._physics_player.task._ball_root_states[has_contact_now]
+        #         )
+        #     )
+        #     if has_valid_contact.sum() > 0:
+        #         env_ids = has_contact_now.nonzero(as_tuple=False).flatten()[
+        #             has_valid_contact
+        #         ]
+        #         self._est_bounce_pos[env_ids, :2] = bounce_pos
+        #         self._est_bounce_time[env_ids] = bounce_time
+        #         self._est_max_height[env_ids] = max_height
 
-                self._est_bounce_in[env_ids] = (
-                    (self._est_bounce_pos[env_ids, 0] > court_min[0])
-                    & (self._est_bounce_pos[env_ids, 0] < court_max[0])
-                    & (self._est_bounce_pos[env_ids, 1] > court_min[1])
-                    & (self._est_bounce_pos[env_ids, 1] < court_max[1])
-                )
+        #         self._est_bounce_in[env_ids] = (
+        #             (self._est_bounce_pos[env_ids, 0] > court_min[0])
+        #             & (self._est_bounce_pos[env_ids, 0] < court_max[0])
+        #             & (self._est_bounce_pos[env_ids, 1] > court_min[1])
+        #             & (self._est_bounce_pos[env_ids, 1] < court_max[1])
+        #         )
 
         self._phase_pred = self._mvae_player._phase_pred
 
@@ -784,7 +786,7 @@ def compute_reward_return(
     return reward, sub_rewards, sub_rewards_names
 
 
-@torch.jit.script
+# @torch.jit.script
 def compute_reward_return_w_estimate(
     racket_pos,
     phase,
@@ -799,7 +801,7 @@ def compute_reward_return_w_estimate(
     weights,
 ):
     # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Dict[str, float], Dict[str, float]) -> Tuple[Tensor, Tensor, str]
-
+    print(ball_pos)
     w_pos, w_bounce = weights.get("pos", 0.0), weights.get("ball_pos", 0.0)
 
     # position
@@ -814,6 +816,8 @@ def compute_reward_return_w_estimate(
     )
     phase_diff_rea = phase - contact_phase
     phase_err_rea = phase_diff_rea * phase_diff_rea
+
+    print("Has contact:", has_contact)
 
     pos_reward = ~has_contact * torch.exp(
         -scales.get("pos", 5.0) * pos_err
