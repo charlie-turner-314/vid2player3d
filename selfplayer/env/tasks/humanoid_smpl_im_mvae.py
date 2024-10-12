@@ -494,7 +494,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             len(env_ids), need_init_state=True, start_pos=self._ball_pos[env_ids].cpu(), env_ids=env_ids)
 
         launch_ang_vel = launch_vspin.view(-1, 1) * math.pi * 2 * F.normalize(
-            torch.cross(launch_vel, torch.FloatTensor([0, 0, -1]).repeat(len(env_ids), 1)), dim=1)
+            torch.linalg.cross(launch_vel, torch.FloatTensor([0, 0, -1]).repeat(len(env_ids), 1)), dim=1)
         
         if ball_root_states is not None:
             self._ball_root_states[env_ids] = ball_root_states
@@ -704,7 +704,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
         vel_scalar[vel_scalar == 0] += 1 # Avoid divide by 0
         vel_norm = vel / vel_scalar
         g_tensor = torch.FloatTensor([[0, 0, -1]]).repeat(self.num_envs, 1).to(self.device)
-        vel_tan = torch.cross(vel_norm, g_tensor)
+        vel_tan = torch.linalg.cross(vel_norm, g_tensor)
         vspin = ball_root_states[:, 10:13].norm(dim=1).view(-1, 1) / (math.pi * 2)
         spin_scale = self.cfg_v2p.get('spin_scale', 1.0)
 
@@ -715,7 +715,7 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             1 * torch.ones_like(cl)
         )
         force_drag = - kf * cd * vel_scalar * vel
-        force_lift = - kf * cl * vel_scalar ** 2 * torch.cross(vel_tan, vel_norm) 
+        force_lift = - kf * cl * vel_scalar ** 2 * torch.linalg.cross(vel_tan, vel_norm) 
         
         if self.cfg['sim'].get('substeps', 2) > 2:
             has_bounce_now = ~self._has_bounce & (pos[:, 2] <= R * 6)

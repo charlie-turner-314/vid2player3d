@@ -99,6 +99,7 @@ class SelfPlayControllerVis(PhysicsSelfPlayController):
                     if max_dist > dist:
                         break
                     insert_id += 1
+
                 self.distance_best_all.insert(insert_id, max_dist)
                 self.joint_rot_best_all.insert(insert_id, self.joint_rot_all[best_env_ids, :nframes].clone())
                 self.root_pos_best_all.insert(insert_id, self.root_pos_all[best_env_ids, :nframes].clone())

@@ -288,6 +288,10 @@ class PhysicsSelfPlayController:
             new_traj = self._physics_player.task.reset(
                 reset_actor_reaction_env_ids, reset_reaction_env_ids)
             self._ball_traj[reset_reaction_env_ids, :new_traj.shape[1]] = new_traj.to(self.device)
+            # mirror ball traj x and y for the opponents
+            opponents = get_opponent_env_ids(reset_reaction_env_ids)
+            self._ball_traj[opponents] = self._ball_traj[reset_reaction_env_ids] * torch.FloatTensor([-1, -1, 1]).to(self.device)
+
             
             if not self.headless and not self._has_init:
                 self._physics_player.task.render_vis(init=True)
@@ -683,7 +687,6 @@ def compute_pos_reward(
     w_pos = weights.get("pos", 0.0)
 
     # position
-    print(ball_pos)
     pos_diff = ball_pos - racket_pos
     pos_err = torch.sum(pos_diff * pos_diff, dim=-1)
 
