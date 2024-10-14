@@ -2,7 +2,7 @@
 name: PhysicsSelfPlayController
 test_name: SelfPlayControllerVis
 env: 
-  numEnvs: 2
+  numEnvs: 8192
   episodeLength: 300
   envSpacing: 5
   isFlagrun: False
@@ -147,7 +147,7 @@ params:
     learning_rate: 1e-5
     lr_schedule: constant
     score_to_win: 20000
-    max_epochs: 10
+    max_epochs: 10000
     save_best_after:  10
     save_frequency: 500
     print_stats: True
@@ -164,4 +164,4 @@ params:
     bounds_loss_coef: 10
     clip_actions_val: 5.0
     pretrained_model_cp: results/kyrgios_bouncy_3/models/tennis_v1_latest.pth
-    use_comet: False
+    use_comet: True
