@@ -285,13 +285,12 @@ class PhysicsSelfPlayController:
             self._reset_env_tensors(reset_actor_env_ids)
         
         if len(reset_reaction_env_ids) > 0:
-            new_traj = self._physics_player.task.reset(
+            new_traj_reaction, new_traj_recovery = self._physics_player.task.reset(
                 reset_actor_reaction_env_ids, reset_reaction_env_ids)
-            self._ball_traj[reset_reaction_env_ids, :new_traj.shape[1]] = new_traj.to(self.device)
-            # mirror ball traj x and y for the opponents
-            opponents = get_opponent_env_ids(reset_reaction_env_ids)
-            self._ball_traj[opponents] = self._ball_traj[reset_reaction_env_ids] * torch.FloatTensor([-1, -1, 1]).to(self.device)
+            self._ball_traj[reset_reaction_env_ids, :new_traj_reaction.shape[1]] = new_traj_reaction.to(self.device)
+            self._ball_traj[reset_recovery_env_ids, :new_traj_recovery.shape[1]] = new_traj_recovery.to(self.device)
 
+            # print(self._ball_traj)
             
             if not self.headless and not self._has_init:
                 self._physics_player.task.render_vis(init=True)
@@ -541,13 +540,27 @@ class PhysicsSelfPlayController:
             self._reward_scales,
             reward_weights,
         )
-        # Get 'miss' and 'out' from _compute_reset()
-        miss = self._reset_recovery_buf & ~self._physics_player.task._has_racket_ball_contact
-        out = (self._tar_action == 0) & self._physics_player.task._has_bounce & ~self._bounce_in
+
+        has_contact = self._physics_player.task._has_racket_ball_contact
+        has_bounce = self._physics_player.task._has_bounce
+        miss_ball = self._ball_pos[:, 1] < self._root_pos[:, 1] - 1
+        ball_bounce_twice = has_bounce & (self._ball_pos[:, 2] < 0.05)
+        reset_recovery = (self._tar_action == 1) & (has_contact | miss_ball | ball_bounce_twice)
+
+        miss = reset_recovery & ~self._physics_player.task._has_racket_ball_contact
+        out = (self._tar_action == 0) & has_bounce & ~self._bounce_in
+
+        # need to one-hot encode the misses and outs
+        miss = miss.long()
+        out = out.long()
+        terminate = miss | out
+
+        terminate[::2] |= terminate[1::2]
+        terminate[1::2] |= terminate[::2]
 
         # Compute win and lose rewards
         win_reward, lose_penalty = compute_win_reward_and_lose_penalty(
-            self.reset_buf,
+            terminate,
             miss,
             out,
             reward_weights,
@@ -596,7 +609,11 @@ class PhysicsSelfPlayController:
         miss = self._reset_recovery_buf & ~has_contact
         out = in_recovery & has_bounce & ~self._bounce_in
         terminate = miss | out
+        # if any resets: print why
         if terminate.sum() > 0:
+            # print("miss", miss.nonzero(as_tuple=False).flatten())
+            # print("out", out.nonzero(as_tuple=False).flatten())
+
             terminate[::2] |= terminate[1::2]
             terminate[1::2] |= terminate[::2]
 
@@ -620,7 +637,12 @@ class PhysicsSelfPlayController:
         self.extras["sub_rewards"] = self._sub_rewards
         self.extras["sub_rewards_names"] = self._sub_rewards_names
 
+
     def step(self, actions):
+        # save the ball states
+        # with open("ball_state.csv", "a+") as file:
+        #     file.write("0," + str(self._physics_player.task._ball_root_states[0].tolist()).replace("[", "").replace("]", "") + "\n")
+        #     file.write("1," + str(self._physics_player.task._ball_root_states[1].tolist()).replace("[", "").replace("]", "") + "\n")
         self.pre_physics_step(actions)
 
         self.physics_step()
@@ -713,7 +735,7 @@ def compute_pos_reward(
 
     return pos_reward
 
-@torch.jit.script
+# @torch.jit.script
 def compute_win_reward_and_lose_penalty(
     reset_buf: torch.Tensor,
     miss: torch.Tensor,
@@ -721,11 +743,22 @@ def compute_win_reward_and_lose_penalty(
     weights: Dict[str, float],
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Compute the win and lose rewards for the agent."""
-    # Agent won the point if the opponent hit out
-    won_point = reset_buf & out
 
-    # Agent lost the point if they missed the ball
-    lost_point = reset_buf & miss
+    if reset_buf.sum() == 0:
+        return torch.zeros_like(reset_buf), torch.zeros_like(reset_buf)
+
+    # print("reset_buf", reset_buf.tolist())
+    # print("miss", miss.tolist())   
+
+    # Agent lost the point if they missed the ball or hit it out
+    lost_point = reset_buf & miss | out
+
+    # Agent won the point if they are getting reset but did not lose
+    won_point = reset_buf & ~lost_point
+
+    # print which envs won or lost
+    # print("won_point", won_point.tolist())
+    # print("lost_point", lost_point.tolist())
 
     # Scaling factors
     win_scale = weights.get("win", 10.0)

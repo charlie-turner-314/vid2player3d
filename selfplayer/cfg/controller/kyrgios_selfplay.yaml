@@ -2,7 +2,7 @@
 name: PhysicsSelfPlayController
 test_name: SelfPlayControllerVis
 env: 
-  numEnvs: 256
+  numEnvs: 2
   episodeLength: 300
   envSpacing: 5
   isFlagrun: False
@@ -55,7 +55,7 @@ env:
     # lose: losing the point penalty
     # bounce_in: Reward the player for hitting the ball inside the court
     # bounce_pos: Reward the player for difficult shots (near the edge of the court)
-    reward_weights: {'pos': 1, 'win': 10, 'lose': -10, 'bounce_in': 5, 'bounce_pos': 1}
+    reward_weights: {'pos': 10, 'win': 10, 'lose': -10, 'bounce_in': 5, 'bounce_pos': 1}
     ball_traj_out_x_file: data/ball_traj/ball_traj_out_x.npy
     ball_traj_out_y_file: data/ball_traj/ball_traj_out_y.npy
 
@@ -74,6 +74,7 @@ env:
     vae_init_conditions_ready:  data/vae/vae_init_condition_federer_ready.pt
     
 sim:
+  substeps: 6
   none: 0
 
 params:
@@ -146,7 +147,7 @@ params:
     learning_rate: 1e-5
     lr_schedule: constant
     score_to_win: 20000
-    max_epochs: 10000
+    max_epochs: 10
     save_best_after:  10
     save_frequency: 500
     print_stats: True
@@ -163,3 +164,4 @@ params:
     bounds_loss_coef: 10
     clip_actions_val: 5.0
     pretrained_model_cp: results/kyrgios_bouncy_3/models/tennis_v1_latest.pth
+    use_comet: False

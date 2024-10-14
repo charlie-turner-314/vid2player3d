@@ -741,6 +741,10 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
     def _physics_step(self):
         for i in range(self.control_freq_inv):
             self.apply_external_force_to_ball(self._ball_root_states)
+            # print("*")
+            # print(self._ball_root_states)
+
+            # ensure the ball_root_states are updated in the simulator
 
             self.gym.apply_rigid_body_force_tensors(self.sim, gymtorch.unwrap_tensor(self.forces), 
                 gymtorch.unwrap_tensor(self.torques), gymapi.ENV_SPACE)
@@ -748,6 +752,8 @@ class HumanoidSMPLIMMVAE(HumanoidSMPL):
             self.gym.simulate(self.sim)
             self.gym.fetch_results(self.sim, True)
             self.gym.refresh_actor_root_state_tensor(self.sim)
+            # print(self._ball_root_states)
+            # print("*")
             if not self._is_train:
                 self.gym.refresh_rigid_body_state_tensor(self.sim)
                 self._update_rigid_body_state()

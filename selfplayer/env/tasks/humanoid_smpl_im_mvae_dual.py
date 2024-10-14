@@ -36,7 +36,7 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         if len(reset_actor_env_ids) > 0:
             self._reset_actors(reset_actor_env_ids)
         if len(reset_ball_env_ids) > 0:
-            traj = self._reset_balls(reset_actor_recovery_env_ids, reset_ball_env_ids)
+            reaction_traj, recovery_traj = self._reset_balls(reset_actor_recovery_env_ids, reset_ball_env_ids)
         
         # HACK: sync ball states update
         contact_env_ids = get_opponent_env_ids(reset_ball_env_ids)
@@ -47,14 +47,22 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
             # For vis
             self._update_state_from_sim()
 
-        return traj
+        return reaction_traj, recovery_traj
 
     def _reset_balls(self, reset_actor_recovery_env_ids, reset_ball_env_ids):
         traj_serve = None
+        # print("Resetting balls: reset_actor_recovery_env_ids", reset_actor_recovery_env_ids)    # 1
+        # print("Resetting balls: reset_ball_env_ids", reset_ball_env_ids)                        # 0
         if len(reset_actor_recovery_env_ids) > 0:
             # set init ball traj for the other player
-            self._ball_root_states[reset_actor_recovery_env_ids, :3] = self._mvae_player._racket_pos[reset_actor_recovery_env_ids] # Start the ball at the 'recovering' player's racket position
-            self._ball_root_states[reset_actor_recovery_env_ids, 10:13] = torch.FloatTensor([-40, 0, 0]).to(self.device)  # Start with -40 spin?
+            # ball root states for 1
+            # self._ball_root_states[reset_actor_recovery_env_ids, :3] = torch.FloatTensor([-0.92, -12.2, 1.36]).to(self.device) 
+            # print(self._mvae_player._racket_pos[reset_actor_recovery_env_ids])
+
+            self._ball_root_states[reset_actor_recovery_env_ids, :3] = self._mvae_player._racket_pos[reset_actor_recovery_env_ids].clone().detach()
+            self._ball_root_states[reset_actor_recovery_env_ids, 0] = 0.92
+            self._ball_root_states[reset_actor_recovery_env_ids, 10:13] = torch.FloatTensor([0, 0, 0]).to(self.device)  # Start with -40 spin?
+            self._ball_root_states[reset_actor_recovery_env_ids, 3:7] = torch.FloatTensor([0, 0, 0, 1]).to(self.device)  # Start with -40 spin?
 
             # use random ball velocity
             num_envs = len(reset_actor_recovery_env_ids) # Number of environments to 
@@ -64,12 +72,16 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
 
         # sample ball traj to start from contact player's racket pos
         # copy the ball state from the contact player and reverse it
-        contact_env_ids = get_opponent_env_ids(reset_ball_env_ids)
+        contact_env_ids = get_opponent_env_ids(reset_ball_env_ids) # 1 is the contact player
         traj, ball_states_in, ball_states_out = self._ball_in_estimator.estimate(
             self._ball_root_states[contact_env_ids],
             adjust=self.cfg_v2p.get('adjust_ball'),
             )
-        self._ball_root_states[reset_ball_env_ids] = ball_states_in
+        
+        # print(f"Resetting balls: ball_states_in (env {reset_ball_env_ids})", ball_states_in)    # 1
+        # print(f"Resetting balls: ball_states_out (env {contact_env_ids})", ball_states_out)  # 0
+
+        self._ball_root_states[reset_ball_env_ids] = ball_states_in  
         self._ball_root_states[contact_env_ids] = ball_states_out
 
         self._has_bounce[reset_ball_env_ids] = 0
@@ -78,7 +90,18 @@ class HumanoidSMPLIMMVAEDual(HumanoidSMPLIMMVAE):
         self._ball_pos[reset_ball_env_ids] = self._ball_root_states[reset_ball_env_ids, 0:3]
         self._ball_vel[reset_ball_env_ids] = self._ball_root_states[reset_ball_env_ids, 7:10]
 
-        return traj
+        # same for contact player
+        self._has_bounce[contact_env_ids] = 0
+        self._bounce_pos[contact_env_ids] = 0
+        self._has_racket_ball_contact[contact_env_ids] = 0
+        self._ball_pos[contact_env_ids] = self._ball_root_states[contact_env_ids, 0:3]
+        self._ball_vel[contact_env_ids] = self._ball_root_states[contact_env_ids, 7:10]
+
+        reaction_traj = traj
+        recovery_traj = traj.clone()
+        recovery_traj[:, :2] *= -1
+
+        return reaction_traj, recovery_traj
 
     def render_vis(self, init=True):
         NotImplemented 
